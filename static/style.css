@@ -1,5 +1,6 @@
 :root {
   --reading:  #7C3AED;
+  --phonemics: #DB2777;
   --numeracy: #2563EB;
   --language: #B45309;
   --writing:  #059669;
@@ -144,6 +145,7 @@ main {
 }
 .domain-card:hover { transform: translateY(-4px); box-shadow: 0 8px 28px rgba(0,0,0,0.18); }
 .domain-card[data-domain="reading"]              { background: linear-gradient(135deg, #7C3AED, #A78BFA); }
+.domain-card[data-domain="phonemics"]            { background: linear-gradient(135deg, #DB2777, #F472B6); }
 .domain-card[data-domain="numeracy"]             { background: linear-gradient(135deg, #2563EB, #60A5FA); }
 .domain-card[data-domain="language_conventions"] { background: linear-gradient(135deg, #B45309, #FCD34D); color: #431407; }
 .domain-card[data-domain="writing"]              { background: linear-gradient(135deg, #059669, #6EE7B7); }

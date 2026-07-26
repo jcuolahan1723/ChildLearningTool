@@ -7,6 +7,7 @@ const AVATARS = ['🦘','🐨','🦜','🐙','🦁','🐸','🦊','🐼','🦋',
 
 const DOMAIN_INFO = {
   reading:              { name: 'Reading',             icon: '📚', short: 'Reading' },
+  phonemics:            { name: 'Phonemics',           icon: '👂', short: 'Sounds'  },
   numeracy:             { name: 'Numeracy',            icon: '🔢', short: 'Maths'   },
   language_conventions: { name: 'Language Conventions',icon: '✏️', short: 'Language'},
   writing:              { name: 'Writing',             icon: '📝', short: 'Writing' },
