@@ -15,7 +15,11 @@ from pydantic import BaseModel
 
 app = FastAPI(title="NAPLAN Tutor")
 
-DATA_DIR = "data"
+# On Azure App Service (Linux), /home is the persistent, writable directory that
+# survives restarts and redeploys — the rest of the filesystem (/home/site/wwwroot)
+# can be replaced on every deploy. Locally (via start.bat) DATA_DIR isn't set, so
+# this falls back to a plain ./data folder next to app.py, same as before.
+DATA_DIR = os.environ.get("DATA_DIR", "data")
 PROGRESS_DIR = os.path.join(DATA_DIR, "progress")
 CHILDREN_FILE = os.path.join(DATA_DIR, "children.json")
 
@@ -28,13 +32,22 @@ if not os.path.exists(CHILDREN_FILE):
 
 client = anthropic.Anthropic()
 
-DOMAINS = ["reading", "numeracy", "language_conventions", "writing"]
+DOMAINS = ["reading", "phonemics", "numeracy", "language_conventions", "writing"]
 
 DOMAIN_INSTRUCTIONS = {
     "reading": (
         "Generate a short reading comprehension passage (4-6 sentences, age-appropriate) "
         "followed by one multiple choice question about the passage. "
         "Use Australian context (animals, places, people) where natural."
+    ),
+    "phonemics": (
+        "Generate one phonemic awareness / phonics question appropriate for the difficulty level. "
+        "Represent individual sounds using slashes, e.g. /k/ /a/ /t/. Multiple choice with exactly "
+        "4 options. Vary across sessions between: blending sounds into a word (e.g. 'What word do "
+        "these sounds make: /s/ /u/ /n/?'), segmenting a word into its sounds, identifying the "
+        "beginning/middle/end sound in a word, rhyming pairs, counting syllables, and matching a "
+        "letter or letter combination (e.g. 'sh', 'ai') to the sound it makes. Keep vocabulary "
+        "simple and age-appropriate, and use Australian-familiar words where natural."
     ),
     "numeracy": (
         "Generate one mathematics problem appropriate for the difficulty level. "
