@@ -50,27 +50,17 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
+    
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: python-app
       
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_F8C9E0606BEF4F0DA6C2457A18277BF5 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_B0B06817EFA64599AD12058557C9A577 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_530E517C32DF44F78DA571A60F2315E4 }}
-
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
         with:
           app-name: 'ChildLearningCentre'
           slot-name: 'Production'
-          
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_830426D7E6D4418A80AF8DDC473EB79A }}
