@@ -1,0 +1,35 @@
+{
+  "child_id": "bd414781-f927-448a-ba3b-54323c871d71",
+  "domains": {
+    "numeracy": {
+      "difficulty": 2.0,
+      "total_questions": 0,
+      "correct": 0,
+      "recent_results": [],
+      "sessions": [],
+      "topics_covered": [
+        "multiplication"
+      ]
+    },
+    "writing": {
+      "difficulty": 2.0,
+      "total_questions": 0,
+      "correct": 0,
+      "recent_results": [],
+      "sessions": [],
+      "topics_covered": [
+        "persuasive writing"
+      ]
+    },
+    "reading": {
+      "difficulty": 2.0,
+      "total_questions": 0,
+      "correct": 0,
+      "recent_results": [],
+      "sessions": [],
+      "topics_covered": [
+        "comprehension"
+      ]
+    }
+  }
+}

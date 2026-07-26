@@ -1,0 +1,35 @@
+{
+  "child_id": "72595400-2f9c-40cb-a218-307b677a548b",
+  "domains": {
+    "reading": {
+      "difficulty": 2.0,
+      "total_questions": 0,
+      "correct": 0,
+      "recent_results": [],
+      "sessions": [],
+      "topics_covered": [
+        "comprehension"
+      ]
+    },
+    "numeracy": {
+      "difficulty": 2.0,
+      "total_questions": 0,
+      "correct": 0,
+      "recent_results": [],
+      "sessions": [],
+      "topics_covered": [
+        "addition"
+      ]
+    },
+    "writing": {
+      "difficulty": 2.0,
+      "total_questions": 0,
+      "correct": 0,
+      "recent_results": [],
+      "sessions": [],
+      "topics_covered": [
+        "narrative writing"
+      ]
+    }
+  }
+}

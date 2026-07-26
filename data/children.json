@@ -1,0 +1,25 @@
+{
+  "children": [
+    {
+      "id": "72595400-2f9c-40cb-a218-307b677a548b",
+      "name": "Roy",
+      "age": 5,
+      "year_level": 1,
+      "created_at": "2026-06-25T08:51:31.328163"
+    },
+    {
+      "id": "f1cd2bac-a18a-4749-8433-df1d00556fcb",
+      "name": "Coco",
+      "age": 8,
+      "year_level": 3,
+      "created_at": "2026-06-25T08:51:48.371507"
+    },
+    {
+      "id": "bd414781-f927-448a-ba3b-54323c871d71",
+      "name": "Betty",
+      "age": 10,
+      "year_level": 5,
+      "created_at": "2026-06-25T08:51:56.592554"
+    }
+  ]
+}
