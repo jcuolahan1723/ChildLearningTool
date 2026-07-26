@@ -235,6 +235,18 @@ function renderQuestion() {
           <span>${esc(v)}</span>
         </button>`).join('')}
     </div>`;
+  } else if (question.type === 'read_aloud') {
+    body += `
+      <p class="muted mt-8" style="margin-bottom:18px">Have them read or say this out loud.</p>
+      <div id="reveal-box"></div>
+      <button class="btn btn-primary btn-lg btn-full mt-16" id="reveal-btn" onclick="revealReadAloud()">Show Answer 👀</button>
+      <div id="mark-buttons" class="hidden mt-16">
+        <p class="muted text-center" style="margin-bottom:12px">Did they get it right?</p>
+        <div class="row">
+          <button class="btn btn-success btn-lg" onclick="submitReadAloud(true)">✅ Got it right</button>
+          <button class="btn btn-ghost btn-lg" onclick="submitReadAloud(false)">🔁 Needs practice</button>
+        </div>
+      </div>`;
   } else {
     body += `
       <textarea class="writing-area" id="writing-ta"
@@ -271,6 +283,21 @@ function updateWordCount() {
 async function submitMCQ(key) {
   document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
   await processAnswer(key);
+}
+
+function revealReadAloud() {
+  const q          = S.currentQ.question;
+  const revealBox  = document.getElementById('reveal-box');
+  const revealBtn  = document.getElementById('reveal-btn');
+  const markButtons = document.getElementById('mark-buttons');
+  if (revealBox)   revealBox.innerHTML = `<div class="expl-box">${esc(q.explanation)}</div>`;
+  if (revealBtn)   revealBtn.classList.add('hidden');
+  if (markButtons) markButtons.classList.remove('hidden');
+}
+
+async function submitReadAloud(isCorrect) {
+  document.querySelectorAll('#mark-buttons .btn').forEach(b => b.disabled = true);
+  await processAnswer(isCorrect ? 'correct' : 'incorrect');
 }
 
 async function submitWriting() {
