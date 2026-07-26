@@ -41,13 +41,14 @@ DOMAIN_INSTRUCTIONS = {
         "Use Australian context (animals, places, people) where natural."
     ),
     "phonemics": (
-        "Generate one phonemic awareness / phonics question appropriate for the difficulty level. "
-        "Represent individual sounds using slashes, e.g. /k/ /a/ /t/. Multiple choice with exactly "
-        "4 options. Vary across sessions between: blending sounds into a word (e.g. 'What word do "
-        "these sounds make: /s/ /u/ /n/?'), segmenting a word into its sounds, identifying the "
-        "beginning/middle/end sound in a word, rhyming pairs, counting syllables, and matching a "
-        "letter or letter combination (e.g. 'sh', 'ai') to the sound it makes. Keep vocabulary "
-        "simple and age-appropriate, and use Australian-familiar words where natural."
+        "Generate one phonemic awareness / phonics read-aloud task appropriate for the difficulty "
+        "level. This is NOT a multiple choice question — the child will say the answer out loud to "
+        "a parent, who checks it and marks it, so do not reveal the answer in the question text. "
+        "Vary across sessions between: sounding out/blending a word from its letters, segmenting a "
+        "word into its individual sounds, identifying the beginning/middle/end sound in a word, "
+        "producing a rhyme, counting syllables, or saying the sound a letter or letter-combination "
+        "makes (e.g. 'sh', 'ai'). Keep vocabulary simple and age-appropriate, and use "
+        "Australian-familiar words where natural. Use the read_aloud schema."
     ),
     "numeracy": (
         "Generate one mathematics problem appropriate for the difficulty level. "
@@ -170,7 +171,7 @@ def difficulty_label(difficulty: float, year_level: int) -> str:
 
 
 def parse_claude_json(text: str) -> dict:
-    """Strip markdown code fences then parse JSON."""
+    """Strip markdown code fences then parse JSON, with a fallback for stray text."""
     text = text.strip()
     if text.startswith("```"):
         parts = text.split("```")
@@ -179,7 +180,16 @@ def parse_claude_json(text: str) -> dict:
         if inner.startswith("json"):
             inner = inner[4:]
         text = inner.strip()
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Claude occasionally adds a stray word/sentence before or after the
+        # JSON object — fall back to extracting the outermost {...} block.
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return json.loads(text[start:end + 1])
+        raise
 
 
 # --- Routes ---
@@ -316,6 +326,17 @@ For writing:
   "topic": "narrative writing"
 }}
 
+For phonemics read-aloud tasks (used only for the phonemics domain):
+{{
+  "type": "read_aloud",
+  "passage": null,
+  "question": "the word, letters, or short instruction for the child to read or say aloud (do not include the answer here)",
+  "options": null,
+  "correct_answer": null,
+  "explanation": "the correct answer / pronunciation breakdown for the parent to check against, e.g. \\"s-u-n blends to make 'sun'\\"",
+  "topic": "one-word topic e.g. blending"
+}}
+
 Make questions engaging and use Australian context (animals, currency, places) naturally."""
 
     message = client.messages.create(
@@ -363,6 +384,19 @@ async def submit_answer(req: AnswerRequest):
             "explanation": question_data.get("explanation", ""),
             "feedback": None,
             "encouragement": "Fantastic! Keep going! 🌟" if is_correct else "Good try! You'll get the next one! 💪",
+            "score": 1 if is_correct else 0,
+            "max_score": 1,
+        }
+    elif question_data.get("type") == "read_aloud":
+        # Parent listens and marks this directly — no AI grading call needed,
+        # since the app can't hear the child read the word aloud.
+        is_correct = answer.strip().lower() == "correct"
+        feedback = {
+            "is_correct": is_correct,
+            "correct_answer": question_data.get("explanation", ""),
+            "explanation": question_data.get("explanation", ""),
+            "feedback": None,
+            "encouragement": "Fantastic reading! 🌟" if is_correct else "Good try! Practice makes perfect! 💪",
             "score": 1 if is_correct else 0,
             "max_score": 1,
         }
