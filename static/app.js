@@ -40,9 +40,9 @@ const api = {
     return r.json();
   },
   getChildren:  ()              => api.json('/api/children'),
-  addChild:     (name, age)     => api.json('/api/children', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, age: +age}) }),
+  addChild:     (name, age, avatar) => api.json('/api/children', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, age: +age, avatar}) }),
   deleteChild:  (id)            => api.json(`/api/children/${id}`, { method:'DELETE' }),
-  updateChild:  (id, age)       => api.json(`/api/children/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({age: +age}) }),
+  updateChild:  (id, updates)   => api.json(`/api/children/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) }),
   getProgress:  (id)            => api.json(`/api/progress/${id}`),
   getQuestion:  (cid, domain)   => api.json('/api/question', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({child_id:cid, domain}) }),
   submitAnswer: (cid, domain, qdata, answer) => api.json('/api/answer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({child_id:cid, domain, question_data:qdata, answer}) }),
@@ -58,8 +58,26 @@ function esc(s) {
 }
 
 function avatarFor(child) {
+  if (child.avatar) return child.avatar;
   const idx = S.children.findIndex(c => c.id === child.id);
   return AVATARS[(idx >= 0 ? idx : 0) % AVATARS.length];
+}
+
+function avatarPickerHtml(pickerId, selectedAvatar) {
+  return `<div class="avatar-picker" id="${pickerId}">
+    ${AVATARS.map(a => `
+      <button type="button" class="avatar-opt ${a === selectedAvatar ? 'selected' : ''}"
+        data-avatar="${a}" onclick="selectAvatar(this)">${a}</button>`).join('')}
+  </div>`;
+}
+
+function selectAvatar(btn) {
+  btn.parentElement.querySelectorAll('.avatar-opt').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function getSelectedAvatar(pickerId) {
+  return document.querySelector(`#${pickerId} .avatar-opt.selected`)?.dataset.avatar || AVATARS[0];
 }
 
 function setLoading(msg = 'Thinking... ✨') {
@@ -479,6 +497,10 @@ function showAddModal() {
         <label class="form-label">Age</label>
         <select class="form-input" id="m-age">${ageOptions}</select>
       </div>
+      <div class="form-group">
+        <label class="form-label">Choose an Avatar</label>
+        ${avatarPickerHtml('m-avatar-picker', AVATARS[0])}
+      </div>
       <div class="row mt-24">
         <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
         <button class="btn btn-primary" style="flex:2" onclick="confirmAdd()">Add Child ✨</button>
@@ -498,12 +520,13 @@ function closeModal() {
 }
 
 async function confirmAdd() {
-  const name = document.getElementById('m-name')?.value.trim();
-  const age  = document.getElementById('m-age')?.value;
+  const name   = document.getElementById('m-name')?.value.trim();
+  const age    = document.getElementById('m-age')?.value;
+  const avatar = getSelectedAvatar('m-avatar-picker');
   if (!name) { alert('Please enter a name!'); return; }
 
   try {
-    const child = await api.addChild(name, age);
+    const child = await api.addChild(name, age, avatar);
     S.children.push(child);
     closeModal();
     renderHome();
@@ -539,11 +562,15 @@ function showEditChildModal() {
       <h2 class="modal-title">⚙️ Edit Learner Settings</h2>
       <div class="form-group">
         <label class="form-label">Child's Name</label>
-        <input class="form-input" id="m-edit-name" type="text" value="${esc(ch.name)}" disabled style="background:#f0f0f0;cursor:not-allowed">
+        <input class="form-input" id="m-edit-name" type="text" value="${esc(ch.name)}" autocomplete="off">
       </div>
       <div class="form-group">
         <label class="form-label">Age</label>
         <select class="form-input" id="m-edit-age">${ageOptions}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Avatar</label>
+        ${avatarPickerHtml('m-edit-avatar-picker', avatarFor(ch))}
       </div>
       <p class="muted" style="font-size:0.85em;margin-bottom:16px">✓ Changing age will update the child's year level and starting difficulty for new questions.</p>
       <div class="row mt-24">
@@ -557,11 +584,14 @@ function showEditChildModal() {
 }
 
 async function confirmEditChild() {
-  const age = document.getElementById('m-edit-age')?.value;
-  if (!age) { alert('Please select an age!'); return; }
+  const name   = document.getElementById('m-edit-name')?.value.trim();
+  const age    = document.getElementById('m-edit-age')?.value;
+  const avatar = getSelectedAvatar('m-edit-avatar-picker');
+  if (!name) { alert('Please enter a name!'); return; }
+  if (!age)  { alert('Please select an age!'); return; }
 
   try {
-    await api.updateChild(S.currentChild.id, age);
+    await api.updateChild(S.currentChild.id, { name, age: +age, avatar });
     const prog = await api.getProgress(S.currentChild.id);
     S.currentChild = prog.child;
     S.progress = prog;

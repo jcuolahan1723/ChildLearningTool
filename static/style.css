@@ -324,6 +324,23 @@ main {
 }
 .form-input:focus { outline: none; border-color: #4F46E5; }
 
+.avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+.avatar-opt {
+  font-size: 1.6em;
+  padding: 10px 0;
+  border: 2px solid #E2E8F0;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.avatar-opt:hover     { border-color: #4F46E5; transform: translateY(-2px); }
+.avatar-opt.selected  { border-color: #4F46E5; background: #EDE9FE; }
+
 /* ── Spinner / Loading ── */
 .loading-spinner {
   display: flex;
