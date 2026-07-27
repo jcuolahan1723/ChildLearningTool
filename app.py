@@ -76,6 +76,7 @@ DOMAIN_INSTRUCTIONS = {
 class Child(BaseModel):
     name: str
     age: int
+    avatar: Optional[str] = None
 
 
 class QuestionRequest(BaseModel):
@@ -91,7 +92,9 @@ class AnswerRequest(BaseModel):
 
 
 class UpdateChildRequest(BaseModel):
-    age: int
+    name: Optional[str] = None
+    age: Optional[int] = None
+    avatar: Optional[str] = None
 
 
 class AdjustDifficultyRequest(BaseModel):
@@ -216,6 +219,7 @@ async def add_child(child: Child):
         "name": child.name,
         "age": child.age,
         "year_level": year_level,
+        "avatar": child.avatar or "🦘",
         "created_at": datetime.now().isoformat(),
     }
     data["children"].append(new_child)
@@ -230,8 +234,13 @@ async def update_child(child_id: str, req: UpdateChildRequest):
     if not child:
         raise HTTPException(404, "Child not found")
 
-    child["age"] = req.age
-    child["year_level"] = age_to_year_level(req.age)
+    if req.name is not None and req.name.strip():
+        child["name"] = req.name.strip()
+    if req.age is not None:
+        child["age"] = req.age
+        child["year_level"] = age_to_year_level(req.age)
+    if req.avatar is not None:
+        child["avatar"] = req.avatar
 
     save_children(data)
     return child
