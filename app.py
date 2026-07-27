@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -33,6 +34,8 @@ if not os.path.exists(CHILDREN_FILE):
 client = anthropic.Anthropic()
 
 DOMAINS = ["reading", "phonemics", "numeracy", "language_conventions", "writing"]
+
+FUN_BREAK_KINDS = ["did_you_know", "dad_joke", "riddle"]
 
 DOMAIN_INSTRUCTIONS = {
     "reading": (
@@ -361,6 +364,51 @@ Make questions engaging and use Australian context (animals, currency, places) n
         "difficulty": difficulty,
         "difficulty_desc": diff_desc,
     }
+
+
+@app.get("/api/funbreak/{child_id}")
+async def get_fun_break(child_id: str):
+    children = load_children()
+    child = next((c for c in children["children"] if c["id"] == child_id), None)
+    if not child:
+        raise HTTPException(404, "Child not found")
+
+    kind = random.choice(FUN_BREAK_KINDS)
+    age = child["age"]
+
+    if kind == "did_you_know":
+        instruction = (
+            f"Generate one surprising, kid-friendly 'did you know' fact suitable for a {age} "
+            "year old. Draw from animals, space, history, science, or geography. Keep it to "
+            "1-2 short, accurate sentences that would genuinely interest a child this age."
+        )
+    elif kind == "dad_joke":
+        instruction = (
+            f"Generate one clean, groan-worthy dad joke suitable for a {age} year old. "
+            "Keep it short — a single question/answer or setup/punchline, one or two "
+            "sentences at most."
+        )
+    else:  # riddle
+        instruction = (
+            f"Generate one fun riddle suitable for a {age} year old, with a clear, short "
+            "(single word or short phrase) answer. Not too easy, not too hard for this age."
+        )
+
+    prompt = f"""{instruction}
+
+Return ONLY valid JSON — no other text, no markdown fences. Use this exact schema:
+{{
+  "kind": "{kind}",
+  "content": "the fact / joke / riddle text",
+  "answer": "the riddle's answer as a short phrase (ONLY for riddle, otherwise null)"
+}}"""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return parse_claude_json(message.content[0].text)
 
 
 @app.post("/api/answer")
