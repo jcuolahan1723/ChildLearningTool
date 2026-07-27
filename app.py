@@ -141,8 +141,11 @@ def get_domain_state(progress: dict, domain: str) -> dict:
             "recent_results": [],
             "sessions": [],
             "topics_covered": [],
+            "recent_questions": [],
         }
-    return progress["domains"][domain]
+    state = progress["domains"][domain]
+    state.setdefault("recent_questions", [])  # backward-compat for progress saved before this existed
+    return state
 
 
 def update_difficulty(state: dict, is_correct: bool) -> None:
@@ -292,7 +295,17 @@ async def generate_question(req: QuestionRequest):
     year_level = child["year_level"]
     diff_desc = difficulty_label(difficulty, year_level)
     topics_covered = state.get("topics_covered", [])[-10:]
+    recent_questions = state.get("recent_questions", [])[-12:]
     domain_display = req.domain.replace("_", " ").title()
+
+    recent_block = ""
+    if recent_questions:
+        numbered = "\n".join(f"- {q}" for q in recent_questions)
+        recent_block = (
+            "\n\nDo NOT repeat, closely rephrase, or reuse the same scenario/numbers/words as "
+            "any of these recently used questions for this child — it must be genuinely "
+            f"different:\n{numbered}\n"
+        )
 
     prompt = f"""You are an Australian primary school NAPLAN-aligned tutor creating a practice question.
 
@@ -300,7 +313,7 @@ Student: Age {child['age']}, Year {year_level}
 Domain: {domain_display}
 Difficulty: {diff_desc} (scale 1.0–5.0, current: {difficulty:.1f})
 Recently covered topics (vary from these): {', '.join(topics_covered) if topics_covered else 'none yet'}
-
+{recent_block}
 Task: {DOMAIN_INSTRUCTIONS[req.domain]}
 
 Return ONLY valid JSON — no other text, no markdown fences. Use this exact schema:
@@ -366,7 +379,19 @@ Make questions engaging and use Australian context (animals, currency, places) n
         if topic not in covered:
             covered.append(topic)
         state["topics_covered"] = covered[-20:]
-        save_progress(req.child_id, progress)
+
+    # Track the actual question text (not just its topic) so future prompts can
+    # explicitly avoid repeating it — this is what actually stops verbatim/near repeats.
+    q_text = question_data.get("question", "") or ""
+    passage = question_data.get("passage") or ""
+    if passage:
+        q_text = f"{passage[:80]}... {q_text}"
+    if q_text:
+        recent_qs = state.get("recent_questions", [])
+        recent_qs.append(q_text)
+        state["recent_questions"] = recent_qs[-15:]
+
+    save_progress(req.child_id, progress)
 
     return {
         "question": question_data,
