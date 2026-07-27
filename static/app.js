@@ -133,6 +133,7 @@ function renderHome() {
     <div class="text-center" style="margin-bottom:32px">
       <h1 style="font-size:2.2em;font-weight:900;color:#4F46E5">🌟 Tutor Tool</h1>
       <p class="muted mt-8">Child's extra learning for Literacy and Numeracy</p>
+      <button class="btn btn-ghost btn-sm mt-8" onclick="showGuideModal()">❓ How to Use / Parent Guide</button>
     </div>
     <div class="card">
       <div class="row" style="align-items:center;margin-bottom:4px">
@@ -474,6 +475,82 @@ function renderComplete() {
         <button class="btn btn-primary btn-lg" onclick="startDomain('${S.currentDomain}')">🔄 Practice Again</button>
       </div>
     </div>`;
+}
+
+// ── Modal: Parent Guide ──────────────────────────────────────────────────
+function showGuideModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'guide-modal';
+
+  overlay.innerHTML = `
+    <div class="modal modal-guide">
+      <h2 class="modal-title">📖 Parent Guide</h2>
+
+      <div class="guide-section">
+        <h3>What this is</h3>
+        <p>Tutor Tool generates fresh, AI-written practice questions for your kids, modelled on
+        the Australian NAPLAN framework — Reading, Phonemics, Numeracy, Language Conventions, and
+        Writing. Every question is created on the spot and tailored to each child, so sessions
+        don't repeat the same fixed question bank.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>Getting started</h3>
+        <p>Add each child from the home screen — name, age, and a chosen avatar. Tap their card,
+        pick a subject, and they'll work through a short session (5 questions) in that area.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>The 5 learning areas</h3>
+        <ul>
+          <li><strong>📚 Reading</strong> — a short passage plus a comprehension question</li>
+          <li><strong>👂 Phonemics</strong> — the child reads or sounds a word out loud; there's
+          no microphone, so you listen in and mark it yourself after tapping "Show Answer"</li>
+          <li><strong>🔢 Numeracy</strong> — number, measurement, geometry, and data questions</li>
+          <li><strong>✏️ Language Conventions</strong> — spelling, grammar, and punctuation</li>
+          <li><strong>📝 Writing</strong> — a prompt, with the AI marking the response and giving
+          encouraging, age-appropriate feedback</li>
+        </ul>
+      </div>
+
+      <div class="guide-section">
+        <h3>Fun breaks 🎉</h3>
+        <p>Every few questions, a quick "Did you know?" fact, dad joke, or riddle pops up to
+        break things up before the next question.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>How the difficulty adapts</h3>
+        <p>Each child has their own difficulty score per subject, starting at <strong>2.0</strong>
+        on a <strong>1.0–5.0</strong> scale. It's not fixed to their age — it moves based on how
+        they're actually doing:</p>
+        <ul>
+          <li>3 correct answers in a row → difficulty rises</li>
+          <li>3 wrong in a row → difficulty eases back down</li>
+          <li>A generally strong run (4 of the last 5) → a smaller nudge upward</li>
+        </ul>
+        <p>You'll see this reflected as a badge like "Year 3 level" or "Above Yr 3" during
+        questions — it's relative to their own age, not a race against other kids.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>Manual adjustment</h3>
+        <p>On the subject dashboard, the <strong>📉 Easier / 📈 Harder</strong> buttons let you
+        nudge the difficulty yourself at any time, independent of the automatic system.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>Progress tracking</h3>
+        <p>Each subject card shows total questions answered, accuracy, and recent results at a
+        glance — tap into a subject any time to see where things stand.</p>
+      </div>
+
+      <button class="btn btn-primary btn-full mt-16" onclick="closeModal()">Got it, thanks!</button>
+    </div>`;
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
 }
 
 // ── Modal: Add child ───────────────────────────────────────────────────────
