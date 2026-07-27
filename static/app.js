@@ -2,6 +2,7 @@
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const SESSION_LENGTH = 5;
+const BREAK_INTERVAL = 3; // show a fun break after every N questions answered
 
 const AVATARS = ['🦘','🐨','🦜','🐙','🦁','🐸','🦊','🐼','🦋','🐬'];
 
@@ -46,6 +47,7 @@ const api = {
   getQuestion:  (cid, domain)   => api.json('/api/question', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({child_id:cid, domain}) }),
   submitAnswer: (cid, domain, qdata, answer) => api.json('/api/answer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({child_id:cid, domain, question_data:qdata, answer}) }),
   adjustDifficulty: (cid, domain, delta) => api.json(`/api/difficulty/${cid}/${domain}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({delta}) }),
+  getFunBreak: (cid) => api.json(`/api/funbreak/${cid}`),
 };
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -208,6 +210,53 @@ async function loadNextQuestion() {
   }
 }
 
+const FUN_BREAK_META = {
+  did_you_know: { icon: '🦕', label: 'Did You Know?' },
+  dad_joke:     { icon: '😂', label: 'Joke Break!' },
+  riddle:       { icon: '🤔', label: 'Riddle Time!' },
+};
+
+async function renderFunBreak() {
+  setLoading('Loading something fun... 🎉');
+  try {
+    S.currentBreak = await api.getFunBreak(S.currentChild.id);
+    renderBreakContent();
+  } catch (e) {
+    // Not core to learning — if it fails, just carry on to the next question.
+    loadNextQuestion();
+  }
+}
+
+function renderBreakContent() {
+  const b    = S.currentBreak;
+  const meta = FUN_BREAK_META[b.kind] || { icon: '✨', label: 'Fun Break!' };
+
+  let body = `
+    <div class="text-center" style="font-size:3em">${meta.icon}</div>
+    <div class="text-center" style="font-weight:800;font-size:1.2em;margin:8px 0 18px">${meta.label}</div>
+    <p style="font-size:1.1em;line-height:1.6;text-align:center;margin-bottom:18px">${esc(b.content)}</p>`;
+
+  if (b.kind === 'riddle' && b.answer) {
+    body += `
+      <div id="riddle-answer"></div>
+      <button class="btn btn-primary btn-lg btn-full" id="riddle-reveal-btn" onclick="revealRiddleAnswer()">Reveal Answer 👀</button>`;
+  } else {
+    body += `<button class="btn btn-primary btn-lg btn-full" onclick="loadNextQuestion()">Continue →</button>`;
+  }
+
+  appEl.innerHTML = `
+    <div class="card">${body}</div>
+    <button class="btn btn-ghost mt-8" onclick="renderDashboard()">← Back to subjects</button>`;
+}
+
+function revealRiddleAnswer() {
+  const b   = S.currentBreak;
+  const box = document.getElementById('riddle-answer');
+  const btn = document.getElementById('riddle-reveal-btn');
+  if (box) box.innerHTML = `<div class="expl-box text-center" style="margin-bottom:16px"><strong>Answer:</strong> ${esc(b.answer)}</div>`;
+  if (btn)  btn.outerHTML = `<button class="btn btn-primary btn-lg btn-full" onclick="loadNextQuestion()">Continue →</button>`;
+}
+
 function renderQuestion() {
   const { question, difficulty, difficulty_desc } = S.currentQ;
   const info    = DOMAIN_INFO[S.currentDomain];
@@ -335,6 +384,7 @@ function renderFeedback() {
   const q        = S.currentQ.question;
   const correct  = feedback.is_correct;
   const isLast   = S.session.results.length >= SESSION_LENGTH;
+  const showBreakNext = !isLast && S.session.results.length % BREAK_INTERVAL === 0;
 
   // Re-render MCQ options with colour coding
   let answerBlock = '';
@@ -377,7 +427,7 @@ function renderFeedback() {
       <div class="row mt-16">
         <button class="btn btn-ghost" onclick="renderDashboard()">📊 Dashboard</button>
         <button class="btn btn-primary btn-lg" style="flex:2"
-          onclick="${isLast ? 'renderComplete()' : 'loadNextQuestion()'}">
+          onclick="${isLast ? 'renderComplete()' : showBreakNext ? 'renderFunBreak()' : 'loadNextQuestion()'}">
           ${isLast ? '🏆 See Results' : 'Next Question →'}
         </button>
       </div>
