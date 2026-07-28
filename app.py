@@ -3,7 +3,7 @@ import os
 import random
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from dotenv import load_dotenv
 load_dotenv()  # loads ANTHROPIC_API_KEY from .env if present
@@ -77,6 +77,9 @@ class Child(BaseModel):
     name: str
     age: int
     avatar: Optional[str] = None
+    active_domains: Optional[List[str]] = None
+    starting_levels: Optional[dict] = None
+    focus_note: Optional[str] = None
 
 
 class QuestionRequest(BaseModel):
@@ -99,6 +102,12 @@ class UpdateChildRequest(BaseModel):
 
 class AdjustDifficultyRequest(BaseModel):
     delta: float
+
+
+class UpdateFocusRequest(BaseModel):
+    active_domains: List[str]
+    focus_note: Optional[str] = None
+    starting_levels: Optional[dict] = None
 
 
 # --- Data helpers ---
@@ -217,16 +226,33 @@ async def get_children():
 async def add_child(child: Child):
     data = load_children()
     year_level = age_to_year_level(child.age)
+
+    active_domains = [d for d in (child.active_domains or DOMAINS) if d in DOMAINS]
+    if not active_domains:
+        active_domains = list(DOMAINS)  # never let a child end up with zero focus areas
+
     new_child = {
         "id": str(uuid.uuid4()),
         "name": child.name,
         "age": child.age,
         "year_level": year_level,
         "avatar": child.avatar or "🦘",
+        "active_domains": active_domains,
+        "focus_note": (child.focus_note or "").strip(),
         "created_at": datetime.now().isoformat(),
     }
     data["children"].append(new_child)
     save_children(data)
+
+    if child.starting_levels:
+        progress = load_progress(new_child["id"])
+        level_map = {"support": 1.3, "level": 2.0, "challenge": 3.0}
+        for domain, level_key in child.starting_levels.items():
+            if domain in active_domains:
+                state = get_domain_state(progress, domain)
+                state["difficulty"] = level_map.get(level_key, 2.0)
+        save_progress(new_child["id"], progress)
+
     return new_child
 
 
@@ -246,6 +272,38 @@ async def update_child(child_id: str, req: UpdateChildRequest):
         child["avatar"] = req.avatar
 
     save_children(data)
+    return child
+
+
+@app.put("/api/children/{child_id}/focus")
+async def update_focus(child_id: str, req: UpdateFocusRequest):
+    data = load_children()
+    child = next((c for c in data["children"] if c["id"] == child_id), None)
+    if not child:
+        raise HTTPException(404, "Child not found")
+
+    valid_domains = [d for d in req.active_domains if d in DOMAINS]
+    if not valid_domains:
+        raise HTTPException(400, "At least one focus area is required")
+
+    child["active_domains"] = valid_domains
+    if req.focus_note is not None:
+        child["focus_note"] = req.focus_note.strip()
+    save_children(data)
+
+    if req.starting_levels:
+        progress = load_progress(child_id)
+        level_map = {"support": 1.3, "level": 2.0, "challenge": 3.0}
+        for domain, level_key in req.starting_levels.items():
+            if domain not in DOMAINS:
+                continue
+            state = get_domain_state(progress, domain)
+            # Only seed difficulty for a domain that hasn't been practiced yet —
+            # never overwrite a difficulty that's already adapted to real answers.
+            if state.get("total_questions", 0) == 0:
+                state["difficulty"] = level_map.get(level_key, 2.0)
+        save_progress(child_id, progress)
+
     return child
 
 
@@ -297,6 +355,7 @@ async def generate_question(req: QuestionRequest):
     topics_covered = state.get("topics_covered", [])[-10:]
     recent_questions = state.get("recent_questions", [])[-12:]
     domain_display = req.domain.replace("_", " ").title()
+    focus_note = (child.get("focus_note") or "").strip()
 
     recent_block = ""
     if recent_questions:
@@ -307,12 +366,14 @@ async def generate_question(req: QuestionRequest):
             f"different:\n{numbered}\n"
         )
 
+    focus_block = f"\nParent's focus note for this child: {focus_note}\n" if focus_note else ""
+
     prompt = f"""You are an Australian primary school NAPLAN-aligned tutor creating a practice question.
 
 Student: Age {child['age']}, Year {year_level}
 Domain: {domain_display}
 Difficulty: {diff_desc} (scale 1.0–5.0, current: {difficulty:.1f})
-Recently covered topics (vary from these): {', '.join(topics_covered) if topics_covered else 'none yet'}
+{focus_block}Recently covered topics (vary from these): {', '.join(topics_covered) if topics_covered else 'none yet'}
 {recent_block}
 Task: {DOMAIN_INSTRUCTIONS[req.domain]}
 
