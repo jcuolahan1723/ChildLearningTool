@@ -40,9 +40,12 @@ const api = {
     return r.json();
   },
   getChildren:  ()              => api.json('/api/children'),
-  addChild:     (name, age, avatar) => api.json('/api/children', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, age: +age, avatar}) }),
+  addChild:     (name, age, avatar, active_domains, starting_levels, focus_note) =>
+    api.json('/api/children', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, age: +age, avatar, active_domains, starting_levels, focus_note}) }),
   deleteChild:  (id)            => api.json(`/api/children/${id}`, { method:'DELETE' }),
   updateChild:  (id, updates)   => api.json(`/api/children/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) }),
+  updateFocus:  (id, updates)   => api.json(`/api/children/${id}/focus`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) }),
   getProgress:  (id)            => api.json(`/api/progress/${id}`),
   getQuestion:  (cid, domain)   => api.json('/api/question', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({child_id:cid, domain}) }),
   submitAnswer: (cid, domain, qdata, answer) => api.json('/api/answer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({child_id:cid, domain, question_data:qdata, answer}) }),
@@ -78,6 +81,53 @@ function selectAvatar(btn) {
 
 function getSelectedAvatar(pickerId) {
   return document.querySelector(`#${pickerId} .avatar-opt.selected`)?.dataset.avatar || AVATARS[0];
+}
+
+const LEVEL_LABELS = { support: 'Needs support', level: 'About right', challenge: 'Ready for more' };
+
+function focusAreaListHtml(preselectedDomains, preselectedLevels) {
+  preselectedDomains = preselectedDomains || [];
+  preselectedLevels  = preselectedLevels  || {};
+  return Object.entries(DOMAIN_INFO).map(([key, info]) => {
+    const checked = preselectedDomains.includes(key);
+    const level   = preselectedLevels[key] || 'level';
+    const levelBtns = Object.entries(LEVEL_LABELS).map(([lk, label]) => `
+        <button type="button" class="level-opt ${lk === level ? 'selected' : ''}"
+          data-level="${lk}" onclick="selectLevel(this)">${label}</button>`).join('');
+    return `
+      <div class="focus-area-item">
+        <label class="focus-area-check">
+          <input type="checkbox" class="focus-domain-cb" data-domain="${key}"
+            ${checked ? 'checked' : ''} onchange="toggleFocusLevel(this)">
+          <span>${info.icon} ${info.name}</span>
+        </label>
+        <div class="focus-level-picker ${checked ? '' : 'hidden'}" id="level-${key}">${levelBtns}</div>
+      </div>`;
+  }).join('');
+}
+
+function toggleFocusLevel(cb) {
+  const picker = document.getElementById(`level-${cb.dataset.domain}`);
+  if (picker) picker.classList.toggle('hidden', !cb.checked);
+}
+
+function selectLevel(btn) {
+  btn.parentElement.querySelectorAll('.level-opt').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function getFocusSelections() {
+  const active_domains = [];
+  const starting_levels = {};
+  document.querySelectorAll('.focus-domain-cb').forEach(cb => {
+    if (cb.checked) {
+      const domain = cb.dataset.domain;
+      active_domains.push(domain);
+      const sel = document.querySelector(`#level-${domain} .level-opt.selected`);
+      starting_levels[domain] = sel ? sel.dataset.level : 'level';
+    }
+  });
+  return { active_domains, starting_levels };
 }
 
 function setLoading(msg = 'Thinking... ✨') {
@@ -167,8 +217,20 @@ async function selectChild(id) {
 function renderDashboard() {
   const ch   = S.currentChild;
   const prog = S.progress;
+  const activeDomains = (ch.active_domains && ch.active_domains.length) ? ch.active_domains : Object.keys(DOMAIN_INFO);
 
   const domainCards = Object.entries(DOMAIN_INFO).map(([key, info]) => {
+    if (!activeDomains.includes(key)) {
+      return `
+        <div style="position:relative">
+          <button class="domain-card domain-card-inactive" data-domain="${key}" onclick="quickAddFocusArea('${key}')">
+            <div class="domain-icon">${info.icon}</div>
+            <div class="domain-name">${info.name}</div>
+            <div class="domain-stats">＋ Add this area</div>
+          </button>
+        </div>`;
+    }
+
     const d    = prog.domains[key] || { difficulty:2.0, total_questions:0, correct:0, accuracy:0, difficulty_desc:'', recent_results:[] };
     const pct  = d.accuracy || 0;
     const dots = (d.recent_results || []).map(r =>
@@ -200,11 +262,31 @@ function renderDashboard() {
       <div style="font-size:4em">${avatarFor(ch)}</div>
       <h2 style="font-size:1.7em;font-weight:900;margin-top:8px">${esc(ch.name)}</h2>
       <p class="muted">Age ${ch.age} · Year ${ch.year_level}</p>
-      <button class="btn btn-ghost" style="margin-top:12px;font-size:0.9em" onclick="showEditChildModal()">⚙️ Edit Settings</button>
+      ${ch.focus_note ? `<p class="muted" style="font-size:0.85em;margin-top:6px;font-style:italic">"${esc(ch.focus_note)}"</p>` : ''}
+      <div class="row" style="justify-content:center;gap:8px;margin-top:12px;max-width:340px;margin-left:auto;margin-right:auto">
+        <button class="btn btn-ghost" style="font-size:0.9em" onclick="showEditChildModal()">⚙️ Edit Settings</button>
+        <button class="btn btn-ghost" style="font-size:0.9em" onclick="showManageFocusModal()">🎯 Focus Areas</button>
+      </div>
     </div>
     <h3 style="font-weight:800;font-size:1.1em;margin-bottom:4px">Choose a subject to practise</h3>
     <p class="muted" style="font-size:0.88em;margin-bottom:16px">Questions get harder as you improve — and easier if you need more practice</p>
     <div class="domain-grid">${domainCards}</div>`;
+}
+
+async function quickAddFocusArea(domain) {
+  const ch = S.currentChild;
+  const current = (ch.active_domains && ch.active_domains.length) ? ch.active_domains : Object.keys(DOMAIN_INFO);
+  if (current.includes(domain)) return;
+  const updated = [...current, domain];
+
+  try {
+    const updatedChild = await api.updateFocus(ch.id, { active_domains: updated, focus_note: ch.focus_note });
+    S.currentChild = updatedChild;
+    S.progress = await api.getProgress(ch.id);
+    renderDashboard();
+  } catch (e) {
+    alert('Could not add this area — please try again.');
+  }
 }
 
 // ── Screen: Question ───────────────────────────────────────────────────────
@@ -564,7 +646,7 @@ function showAddModal() {
     .join('');
 
   overlay.innerHTML = `
-    <div class="modal">
+    <div class="modal modal-guide">
       <h2 class="modal-title">➕ Add a Learner</h2>
       <div class="form-group">
         <label class="form-label">Child's Name</label>
@@ -577,6 +659,17 @@ function showAddModal() {
       <div class="form-group">
         <label class="form-label">Choose an Avatar</label>
         ${avatarPickerHtml('m-avatar-picker', AVATARS[0])}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Focus Areas — what should we start with?</label>
+        <p class="muted" style="font-size:0.85em;margin-bottom:10px">All areas are ticked by
+        default — untick any you'd rather add later. For each one you keep, pick the level
+        that fits best right now.</p>
+        <div class="focus-area-list">${focusAreaListHtml(Object.keys(DOMAIN_INFO), {})}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Anything specific? <span class="muted" style="font-weight:400">(optional)</span></label>
+        <textarea class="form-input" id="m-focus-note" rows="2" placeholder="e.g. struggles with blending sounds, confident with times tables..."></textarea>
       </div>
       <div class="row mt-24">
         <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
@@ -600,10 +693,13 @@ async function confirmAdd() {
   const name   = document.getElementById('m-name')?.value.trim();
   const age    = document.getElementById('m-age')?.value;
   const avatar = getSelectedAvatar('m-avatar-picker');
+  const focus_note = document.getElementById('m-focus-note')?.value.trim() || null;
+  const { active_domains, starting_levels } = getFocusSelections();
   if (!name) { alert('Please enter a name!'); return; }
+  if (active_domains.length === 0) { alert('Please pick at least one focus area to start with!'); return; }
 
   try {
-    const child = await api.addChild(name, age, avatar);
+    const child = await api.addChild(name, age, avatar, active_domains, starting_levels, focus_note);
     S.children.push(child);
     closeModal();
     renderHome();
@@ -676,6 +772,52 @@ async function confirmEditChild() {
     renderDashboard();
   } catch (e) {
     alert('Error updating child — please try again.');
+  }
+}
+
+// ── Modal: Manage Focus Areas ────────────────────────────────────────────
+function showManageFocusModal() {
+  const ch = S.currentChild;
+  const active = (ch.active_domains && ch.active_domains.length) ? ch.active_domains : Object.keys(DOMAIN_INFO);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'focus-modal';
+
+  overlay.innerHTML = `
+    <div class="modal modal-guide">
+      <h2 class="modal-title">🎯 Focus Areas</h2>
+      <p class="muted" style="font-size:0.88em;margin-bottom:16px">Choose which subjects
+      ${esc(ch.name)} is currently working on. Unticked areas stay available to add anytime —
+      nothing is lost. The level pick only applies to areas not yet started.</p>
+      <div class="focus-area-list">${focusAreaListHtml(active, {})}</div>
+      <div class="form-group mt-16">
+        <label class="form-label">Focus note <span class="muted" style="font-weight:400">(optional)</span></label>
+        <textarea class="form-input" id="m-focus-note-edit" rows="2" placeholder="e.g. struggles with blending sounds...">${esc(ch.focus_note || '')}</textarea>
+      </div>
+      <div class="row mt-24">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:2" onclick="confirmManageFocus()">Save Changes ✓</button>
+      </div>
+    </div>`;
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+}
+
+async function confirmManageFocus() {
+  const { active_domains, starting_levels } = getFocusSelections();
+  const focus_note = document.getElementById('m-focus-note-edit')?.value.trim() || '';
+  if (active_domains.length === 0) { alert('Please keep at least one focus area active!'); return; }
+
+  try {
+    const updatedChild = await api.updateFocus(S.currentChild.id, { active_domains, focus_note, starting_levels });
+    S.currentChild = updatedChild;
+    S.progress = await api.getProgress(S.currentChild.id);
+    closeModal();
+    renderDashboard();
+  } catch (e) {
+    alert('Error updating focus areas — please try again.');
   }
 }
 
