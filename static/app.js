@@ -579,8 +579,21 @@ function showGuideModal() {
 
       <div class="guide-section">
         <h3>Getting started</h3>
-        <p>Add each child from the home screen — name, age, and a chosen avatar. Tap their card,
-        pick a subject, and they'll work through a short session (5 questions) in that area.</p>
+        <p>Add each child from the home screen — name, age, and a chosen avatar. You'll also
+        pick which subjects to focus on right now and how they're currently going in each, which
+        sets a smart starting point instead of one-size-fits-all. Tap their card, pick a subject,
+        and they'll work through a short session (5 questions) in that area.</p>
+      </div>
+
+      <div class="guide-section">
+        <h3>Focus areas</h3>
+        <p>You don't need to start all 5 subjects at once — tick just what's relevant right now
+        (e.g. only Language Conventions, if that's the current priority). Skipped areas still
+        show on the dashboard, greyed out with a <strong>+ Add this area</strong> button, so you
+        can bring them in later with one tap. Tap <strong>🎯 Focus Areas</strong> on a child's
+        dashboard any time to add, remove, or update subjects — and to add or edit a short focus
+        note (e.g. "struggles with blending sounds") that gets factored into the questions the AI
+        generates for that child.</p>
       </div>
 
       <div class="guide-section">
@@ -604,9 +617,11 @@ function showGuideModal() {
 
       <div class="guide-section">
         <h3>How the difficulty adapts</h3>
-        <p>Each child has their own difficulty score per subject, starting at <strong>2.0</strong>
-        on a <strong>1.0–5.0</strong> scale. It's not fixed to their age — it moves based on how
-        they're actually doing:</p>
+        <p>Each child has their own difficulty score per subject, on a <strong>1.0–5.0</strong>
+        scale. When you add a focus area, your level pick sets where it starts — roughly
+        <strong>1.3</strong> for "Needs support", <strong>2.0</strong> for "About right", or
+        <strong>3.0</strong> for "Ready for more". From there, it's not fixed to their age — it
+        moves based on how they're actually doing:</p>
         <ul>
           <li>3 correct answers in a row → difficulty rises</li>
           <li>3 wrong in a row → difficulty eases back down</li>
