@@ -83,6 +83,12 @@ function getSelectedAvatar(pickerId) {
   return document.querySelector(`#${pickerId} .avatar-opt.selected`)?.dataset.avatar || AVATARS[0];
 }
 
+function ageOptionsHtml(selectedAge) {
+  return Array.from({ length: 12 }, (_, i) => i + 5) // ages 5–16 → Foundation through Year 11
+    .map(a => `<option value="${a}" ${a === selectedAge ? 'selected' : ''}>Age ${a} (Year ${a - 5 < 1 ? 'Foundation' : a - 5})</option>`)
+    .join('');
+}
+
 const LEVEL_LABELS = { support: 'Needs support', level: 'About right', challenge: 'Ready for more' };
 
 function focusAreaListHtml(preselectedDomains, preselectedLevels) {
@@ -107,7 +113,21 @@ function focusAreaListHtml(preselectedDomains, preselectedLevels) {
 }
 
 function toggleFocusLevel(cb) {
+  cb.dataset.userTouched = 'true';
   const picker = document.getElementById(`level-${cb.dataset.domain}`);
+  if (picker) picker.classList.toggle('hidden', !cb.checked);
+}
+
+function defaultDomainsForAge(age) {
+  const all = Object.keys(DOMAIN_INFO);
+  return age > 10 ? all.filter(d => d !== 'phonemics') : all; // Phonemics isn't relevant past ~Year 5
+}
+
+function onAddAgeChange(select) {
+  const cb = document.querySelector('.focus-domain-cb[data-domain="phonemics"]');
+  if (!cb || cb.dataset.userTouched === 'true') return; // never override a deliberate choice
+  cb.checked = (+select.value) <= 10;
+  const picker = document.getElementById('level-phonemics');
   if (picker) picker.classList.toggle('hidden', !cb.checked);
 }
 
@@ -572,9 +592,12 @@ function showGuideModal() {
       <div class="guide-section">
         <h3>What this is</h3>
         <p>Tutor Tool generates fresh, AI-written practice questions for your kids, modelled on
-        the Australian NAPLAN framework — Reading, Phonemics, Numeracy, Language Conventions, and
-        Writing. Every question is created on the spot and tailored to each child, so sessions
-        don't repeat the same fixed question bank.</p>
+        the Australian NAPLAN skill areas — Reading, Phonemics, Numeracy, Language Conventions, and
+        Writing. Every question is created on the spot and tailored to each child's age and year
+        level, so sessions don't repeat the same fixed question bank. It covers Foundation through
+        Year 11 (ages 5–16), scaling content up for secondary students rather than treating every
+        age the same. Note that real NAPLAN only tests Years 3, 5, 7, and 9 — for the other years,
+        this is general matched-level practice rather than a specific NAPLAN test.</p>
       </div>
 
       <div class="guide-section">
@@ -599,13 +622,18 @@ function showGuideModal() {
       <div class="guide-section">
         <h3>The 5 learning areas</h3>
         <ul>
-          <li><strong>📚 Reading</strong> — a short passage plus a comprehension question</li>
+          <li><strong>📚 Reading</strong> — a passage plus a comprehension question; scales from
+          short and literal for primary to longer and more analytical for secondary</li>
           <li><strong>👂 Phonemics</strong> — the child reads or sounds a word out loud; there's
-          no microphone, so you listen in and mark it yourself after tapping "Show Answer"</li>
-          <li><strong>🔢 Numeracy</strong> — number, measurement, geometry, and data questions</li>
-          <li><strong>✏️ Language Conventions</strong> — spelling, grammar, and punctuation</li>
+          no microphone, so you listen in and mark it yourself after tapping "Show Answer".
+          Mainly relevant for younger/early readers, so it's not ticked by default past age 10</li>
+          <li><strong>🔢 Numeracy</strong> — number, measurement, geometry, and data for primary;
+          adds algebra, ratios, percentages, and multi-step problems for secondary</li>
+          <li><strong>✏️ Language Conventions</strong> — spelling, grammar, and punctuation for
+          primary; adds sentence structure, voice, and vocabulary-in-context for secondary</li>
           <li><strong>📝 Writing</strong> — a prompt, with the AI marking the response and giving
-          encouraging, age-appropriate feedback</li>
+          encouraging, age-appropriate feedback; scales from narrative/persuasive for primary to
+          structured argument and analysis for secondary</li>
         </ul>
       </div>
 
@@ -656,9 +684,7 @@ function showAddModal() {
   overlay.className = 'modal-overlay';
   overlay.id = 'add-modal';
 
-  const ageOptions = Array.from({ length: 8 }, (_, i) => i + 5)
-    .map(a => `<option value="${a}" ${a === 8 ? 'selected' : ''}>Age ${a} (Year ${a - 5 < 1 ? 'Foundation' : a - 5})</option>`)
-    .join('');
+  const ageOptions = ageOptionsHtml(8);
 
   overlay.innerHTML = `
     <div class="modal modal-guide">
@@ -669,7 +695,10 @@ function showAddModal() {
       </div>
       <div class="form-group">
         <label class="form-label">Age</label>
-        <select class="form-input" id="m-age">${ageOptions}</select>
+        <select class="form-input" id="m-age" onchange="onAddAgeChange(this)">${ageOptions}</select>
+        <p class="muted" style="font-size:0.8em;margin-top:6px">Covers Foundation through Year 11
+        (ages 5–16). Real NAPLAN only tests Years 3, 5, 7, and 9 — other years still get
+        matched practice, just not tied to an actual NAPLAN test that year.</p>
       </div>
       <div class="form-group">
         <label class="form-label">Choose an Avatar</label>
@@ -677,10 +706,11 @@ function showAddModal() {
       </div>
       <div class="form-group">
         <label class="form-label">Focus Areas — what should we start with?</label>
-        <p class="muted" style="font-size:0.85em;margin-bottom:10px">All areas are ticked by
-        default — untick any you'd rather add later. For each one you keep, pick the level
-        that fits best right now.</p>
-        <div class="focus-area-list">${focusAreaListHtml(Object.keys(DOMAIN_INFO), {})}</div>
+        <p class="muted" style="font-size:0.85em;margin-bottom:10px">Ticked by default based on
+        age — untick or tick any to suit (e.g. Phonemics usually isn't relevant for secondary
+        students, but it's there if needed). For each one you keep, pick the level that fits
+        best right now.</p>
+        <div class="focus-area-list">${focusAreaListHtml(defaultDomainsForAge(8), {})}</div>
       </div>
       <div class="form-group">
         <label class="form-label">Anything specific? <span class="muted" style="font-weight:400">(optional)</span></label>
@@ -741,9 +771,7 @@ function showEditChildModal() {
   overlay.className = 'modal-overlay';
   overlay.id = 'edit-modal';
 
-  const ageOptions = Array.from({ length: 8 }, (_, i) => i + 5)
-    .map(a => `<option value="${a}" ${a === ch.age ? 'selected' : ''}>Age ${a} (Year ${a - 5 < 1 ? 'Foundation' : a - 5})</option>`)
-    .join('');
+  const ageOptions = ageOptionsHtml(ch.age);
 
   overlay.innerHTML = `
     <div class="modal">
