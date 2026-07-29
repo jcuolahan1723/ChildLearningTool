@@ -39,9 +39,12 @@ FUN_BREAK_KINDS = ["did_you_know", "dad_joke", "riddle"]
 
 DOMAIN_INSTRUCTIONS = {
     "reading": (
-        "Generate a short reading comprehension passage (4-6 sentences, age-appropriate) "
-        "followed by one multiple choice question about the passage. "
-        "Use Australian context (animals, places, people) where natural."
+        "Generate a reading comprehension passage followed by one multiple choice question about "
+        "it. Scale to the student's year level: for primary (Foundation-Year 6), a short passage "
+        "(4-6 sentences) with a mostly literal comprehension question. For secondary (Year 7+), a "
+        "longer, denser passage (2-3 short paragraphs) with more analytical questions — author's "
+        "purpose, tone, implied meaning, or how a specific technique affects the reader, not just "
+        "recall. Use Australian context (places, people, issues) where natural."
     ),
     "phonemics": (
         "Generate one phonemic awareness / phonics read-aloud task appropriate for the difficulty "
@@ -54,19 +57,28 @@ DOMAIN_INSTRUCTIONS = {
         "Australian-familiar words where natural. Use the read_aloud schema."
     ),
     "numeracy": (
-        "Generate one mathematics problem appropriate for the difficulty level. "
-        "Use multiple choice with exactly 4 options. Include a mix of number, "
-        "measurement, geometry, or data questions across sessions."
+        "Generate one mathematics problem, multiple choice with exactly 4 options, scaled to the "
+        "student's year level. For primary (Foundation-Year 6), a mix of number, measurement, "
+        "geometry, or data questions. For secondary (Year 7+), scale into algebra (simple "
+        "equations/expressions), ratios and proportions, percentages, negative numbers, basic "
+        "statistics or probability, and multi-step word problems, alongside the primary topics as "
+        "appropriate. Vary the topic across sessions rather than repeating the same type."
     ),
     "language_conventions": (
-        "Generate one question testing spelling, grammar, or punctuation. "
-        "Multiple choice with exactly 4 options. "
-        "Examples: identify the misspelled word, choose the correct punctuation, pick the grammatically correct sentence."
+        "Generate one question testing spelling, grammar, or punctuation, multiple choice with "
+        "exactly 4 options, scaled to the student's year level. For primary (Foundation-Year 6), "
+        "keep to basics: identify the misspelled word, choose the correct punctuation, pick the "
+        "grammatically correct sentence. For secondary (Year 7+), also draw on more advanced "
+        "areas: sentence and clause structure, active vs passive voice, correct use of semicolons "
+        "and colons, and vocabulary-in-context (choosing the most precise or appropriate word)."
     ),
     "writing": (
-        "Generate a writing prompt. For younger children (Year 1-3) use narrative (e.g. 'Write a story about...'). "
-        "For older (Year 4+) use persuasive (e.g. 'Write to convince...'). "
-        "Include a brief guide on word count expectations."
+        "Generate a writing prompt with a brief guide on word count expectations, scaled to the "
+        "student's year level. Year 1-3: narrative (e.g. 'Write a story about...'). Year 4-6: "
+        "persuasive (e.g. 'Write to convince...'). Year 7+: a more sophisticated persuasive or "
+        "discursive prompt expecting a structured argument, evidence/examples, and awareness of a "
+        "specific audience — e.g. debating a real-world issue relevant to teenagers, or writing an "
+        "analytical response to a scenario."
     ),
 }
 
@@ -368,7 +380,11 @@ async def generate_question(req: QuestionRequest):
 
     focus_block = f"\nParent's focus note for this child: {focus_note}\n" if focus_note else ""
 
-    prompt = f"""You are an Australian primary school NAPLAN-aligned tutor creating a practice question.
+    prompt = f"""You are an Australian school tutor (primary or secondary, matched precisely to the \
+student's year level below) creating a practice question broadly aligned with NAPLAN literacy and \
+numeracy skill areas. Note: real NAPLAN only tests Years 3, 5, 7, and 9 — for other years, this is \
+general matched-level practice rather than a specific NAPLAN test, so pitch it at what a student in \
+that year would genuinely be working on in class.
 
 Student: Age {child['age']}, Year {year_level}
 Domain: {domain_display}
@@ -473,19 +489,20 @@ async def get_fun_break(child_id: str):
 
     if kind == "did_you_know":
         instruction = (
-            f"Generate one surprising, kid-friendly 'did you know' fact suitable for a {age} "
-            "year old. Draw from animals, space, history, science, or geography. Keep it to "
-            "1-2 short, accurate sentences that would genuinely interest a child this age."
+            f"Generate one surprising 'did you know' fact suitable for someone aged {age}. "
+            "Draw from animals, space, history, science, or geography. Keep it to 1-2 short, "
+            "accurate sentences that would genuinely interest someone this age — for a younger "
+            "child keep it simple and fun, for a teenager it can be more substantial."
         )
     elif kind == "dad_joke":
         instruction = (
-            f"Generate one clean, groan-worthy dad joke suitable for a {age} year old. "
+            f"Generate one clean, groan-worthy dad joke suitable for someone aged {age}. "
             "Keep it short — a single question/answer or setup/punchline, one or two "
             "sentences at most."
         )
     else:  # riddle
         instruction = (
-            f"Generate one fun riddle suitable for a {age} year old, with a clear, short "
+            f"Generate one fun riddle suitable for someone aged {age}, with a clear, short "
             "(single word or short phrase) answer. Not too easy, not too hard for this age."
         )
 
@@ -546,7 +563,8 @@ async def submit_answer(req: AnswerRequest):
     else:
         # Writing — Claude grades it
         year_level = child["year_level"]
-        grading_prompt = f"""You are a warm, encouraging Australian primary school teacher marking a Year {year_level} student's writing (age {child['age']}).
+        grading_prompt = f"""You are a warm, encouraging Australian school teacher (primary or secondary, \
+matched to the student's year level) marking a Year {year_level} student's writing (age {child['age']}).
 
 Writing prompt: {question_data['question']}
 Marking guide: {question_data.get('explanation', 'Clear structure, ideas, and language')}
