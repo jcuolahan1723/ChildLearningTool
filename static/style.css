@@ -345,6 +345,39 @@ main {
 .guide-section ul { padding-left: 20px; line-height: 1.7; }
 .guide-section li { margin-bottom: 4px; }
 
+.topic-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #F1F5F9;
+  font-size: 0.92em;
+  text-transform: capitalize;
+}
+.topic-row:last-child { border-bottom: none; }
+.topic-badge {
+  font-size: 0.82em;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 100px;
+  background: #FEF3C7;
+  color: #92400E;
+  white-space: nowrap;
+  text-transform: none;
+}
+.session-list { max-height: 220px; overflow-y: auto; }
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 0.88em;
+  border-bottom: 1px solid #F1F5F9;
+}
+.session-row:last-child { border-bottom: none; }
+.session-topic { flex: 1; text-transform: capitalize; }
+.session-date  { font-size: 0.85em; white-space: nowrap; }
+
 .avatar-picker {
   display: grid;
   grid-template-columns: repeat(5, 1fr);

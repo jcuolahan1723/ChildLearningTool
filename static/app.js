@@ -51,6 +51,7 @@ const api = {
   submitAnswer: (cid, domain, qdata, answer) => api.json('/api/answer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({child_id:cid, domain, question_data:qdata, answer}) }),
   adjustDifficulty: (cid, domain, delta) => api.json(`/api/difficulty/${cid}/${domain}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({delta}) }),
   getFunBreak: (cid) => api.json(`/api/funbreak/${cid}`),
+  getHistory: (cid) => api.json(`/api/history/${cid}`),
 };
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -283,9 +284,10 @@ function renderDashboard() {
       <h2 style="font-size:1.7em;font-weight:900;margin-top:8px">${esc(ch.name)}</h2>
       <p class="muted">Age ${ch.age} · Year ${ch.year_level}</p>
       ${ch.focus_note ? `<p class="muted" style="font-size:0.85em;margin-top:6px;font-style:italic">"${esc(ch.focus_note)}"</p>` : ''}
-      <div class="row" style="justify-content:center;gap:8px;margin-top:12px;max-width:340px;margin-left:auto;margin-right:auto">
+      <div class="row" style="justify-content:center;gap:8px;margin-top:12px;max-width:460px;margin-left:auto;margin-right:auto">
         <button class="btn btn-ghost" style="font-size:0.9em" onclick="showEditChildModal()">⚙️ Edit Settings</button>
         <button class="btn btn-ghost" style="font-size:0.9em" onclick="showManageFocusModal()">🎯 Focus Areas</button>
+        <button class="btn btn-ghost" style="font-size:0.9em" onclick="showProgressReportModal()">📊 Progress Report</button>
       </div>
     </div>
     <h3 style="font-weight:800;font-size:1.1em;margin-bottom:4px">Choose a subject to practise</h3>
@@ -668,7 +670,10 @@ function showGuideModal() {
       <div class="guide-section">
         <h3>Progress tracking</h3>
         <p>Each subject card shows total questions answered, accuracy, and recent results at a
-        glance — tap into a subject any time to see where things stand.</p>
+        glance. For the full picture, tap <strong>📊 Progress Report</strong> on a child's
+        dashboard — it breaks down accuracy by topic (so you can see exactly where they're
+        struggling, not just an overall score) and shows a recent history of individual answers
+        with dates, across every subject they've practiced.</p>
       </div>
 
       <button class="btn btn-primary btn-full mt-16" onclick="closeModal()">Got it, thanks!</button>
@@ -862,6 +867,83 @@ async function confirmManageFocus() {
   } catch (e) {
     alert('Error updating focus areas — please try again.');
   }
+}
+
+// ── Modal: Progress Report ───────────────────────────────────────────────
+async function showProgressReportModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'report-modal';
+  overlay.innerHTML = `
+    <div class="modal modal-guide">
+      <h2 class="modal-title">📊 Progress Report</h2>
+      <div class="loading-spinner"><div class="spinner"></div><p>Loading report...</p></div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+
+  try {
+    const data = await api.getHistory(S.currentChild.id);
+    renderProgressReport(data);
+  } catch (e) {
+    const modal = document.querySelector('#report-modal .modal');
+    if (modal) modal.innerHTML = `
+      <h2 class="modal-title">📊 Progress Report</h2>
+      <p>Couldn't load the report right now — please try again.</p>
+      <button class="btn btn-primary btn-full mt-16" onclick="closeModal()">Close</button>`;
+  }
+}
+
+function renderProgressReport(data) {
+  const modal = document.querySelector('#report-modal .modal');
+  if (!modal) return; // modal was closed before the fetch finished
+
+  const domains = Object.entries(data.history || {});
+  if (domains.length === 0) {
+    modal.innerHTML = `
+      <h2 class="modal-title">📊 Progress Report</h2>
+      <p class="muted">No questions answered yet — once ${esc(data.child.name)} completes a
+      few, their results and improvement areas will show up here.</p>
+      <button class="btn btn-primary btn-full mt-16" onclick="closeModal()">Close</button>`;
+    return;
+  }
+
+  const sections = domains.map(([domain, d]) => {
+    const info = DOMAIN_INFO[domain] || { icon: '✨', name: domain };
+
+    const improvementHtml = d.improvement_areas.length
+      ? d.improvement_areas.map(t => `
+          <div class="topic-row">
+            <span>${esc(t.topic)}</span>
+            <span class="topic-badge">${t.correct}/${t.total} · ${t.accuracy}%</span>
+          </div>`).join('')
+      : `<p class="muted" style="font-size:0.88em">No clear problem areas yet — going well!</p>`;
+
+    const recentHtml = d.recent_sessions.map(s => {
+      const date = new Date(s.timestamp).toLocaleString(undefined,
+        { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      return `
+        <div class="session-row">
+          <span>${s.is_correct ? '✅' : '❌'}</span>
+          <span class="session-topic">${esc(s.topic || 'general')}</span>
+          <span class="muted session-date">${date}</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="guide-section">
+        <h3>${info.icon} ${info.name} — ${d.accuracy}% overall (${d.correct}/${d.total_questions})</h3>
+        <p class="muted" style="font-size:0.85em;margin-bottom:6px;font-weight:700">🎯 Areas to focus on</p>
+        ${improvementHtml}
+        <p class="muted" style="font-size:0.85em;margin:14px 0 6px;font-weight:700">🕐 Recent answers</p>
+        <div class="session-list">${recentHtml}</div>
+      </div>`;
+  }).join('');
+
+  modal.innerHTML = `
+    <h2 class="modal-title">📊 ${esc(data.child.name)}'s Progress Report</h2>
+    ${sections}
+    <button class="btn btn-primary btn-full mt-16" onclick="closeModal()">Close</button>`;
 }
 
 async function adjustDifficulty(domain, delta) {
