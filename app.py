@@ -352,6 +352,62 @@ async def get_progress(child_id: str):
     return result
 
 
+@app.get("/api/history/{child_id}")
+async def get_history(child_id: str):
+    children = load_children()
+    child = next((c for c in children["children"] if c["id"] == child_id), None)
+    if not child:
+        raise HTTPException(404, "Child not found")
+
+    progress = load_progress(child_id)
+    history: dict = {}
+
+    for domain in DOMAINS:
+        state = progress.get("domains", {}).get(domain)
+        sessions = state.get("sessions", []) if state else []
+        if not sessions:
+            continue
+
+        # Per-topic accuracy, built from the actual answer log rather than just a
+        # flat "topics covered" list, so it can show correct/total per topic.
+        topic_stats: dict = {}
+        for s in sessions:
+            topic = s.get("topic") or "general"
+            ts = topic_stats.setdefault(topic, {"correct": 0, "total": 0})
+            ts["total"] += 1
+            if s.get("is_correct"):
+                ts["correct"] += 1
+
+        topics = [
+            {
+                "topic": t,
+                "correct": v["correct"],
+                "total": v["total"],
+                "accuracy": round(v["correct"] / v["total"] * 100),
+            }
+            for t, v in topic_stats.items()
+        ]
+        topics.sort(key=lambda x: (x["accuracy"], -x["total"]))
+
+        # Only flag as a genuine "needs practice" area with at least 2 attempts,
+        # so one unlucky first try doesn't get singled out as a weak spot.
+        improvement_areas = [t for t in topics if t["total"] >= 2 and t["accuracy"] < 70][:5]
+
+        total = state.get("total_questions", 0)
+        correct = state.get("correct", 0)
+
+        history[domain] = {
+            "total_questions": total,
+            "correct": correct,
+            "accuracy": round(correct / total * 100) if total > 0 else 0,
+            "topics": topics,
+            "improvement_areas": improvement_areas,
+            "recent_sessions": list(reversed(sessions))[:15],
+        }
+
+    return {"child": child, "history": history}
+
+
 @app.post("/api/question")
 async def generate_question(req: QuestionRequest):
     children = load_children()
