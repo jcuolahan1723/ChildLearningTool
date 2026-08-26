@@ -48,6 +48,8 @@ const S = {
   currentFinanceQ:      null,
   lastFinanceResult:    null,
   financeSession:       { correct: 0, total: 0, results: [] },
+  currentModuleId:      null, // set when running a module quiz, null during free practice
+  currentModuleName:    null,
 };
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
@@ -90,9 +92,12 @@ const financeApi = {
   updateFocus:  (id, updates)   => api.json(`/api/finance/learners/${id}/focus`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) }),
   getProgress:  (id)            => api.json(`/api/finance/progress/${id}`),
   getHistory:   (id)            => api.json(`/api/finance/history/${id}`),
-  getQuestion:  (lid, domain)   => api.json('/api/finance/question', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({learner_id:lid, domain}) }),
+  getQuestion:  (lid, domain, moduleId) => api.json('/api/finance/question', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({learner_id:lid, domain, module_id: moduleId || null}) }),
   submitAnswer: (lid, domain, qdata, answer) => api.json('/api/finance/answer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({learner_id:lid, domain, question_data:qdata, answer}) }),
   adjustDifficulty: (lid, domain, delta) => api.json(`/api/finance/difficulty/${lid}/${domain}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({delta}) }),
+  getModules:   (lid, domain)   => api.json(`/api/finance/modules/${lid}/${domain}`),
+  getLesson:    (lid, domain, moduleId) => api.json('/api/finance/lesson', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({learner_id:lid, domain, module_id:moduleId}) }),
+  completeModule: (lid, domain, moduleId, correct, total) => api.json('/api/finance/module-complete', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({learner_id:lid, domain, module_id:moduleId, correct, total}) }),
 };
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -1227,7 +1232,7 @@ function renderFinanceDashboard() {
 
     return `
       <div style="position:relative">
-        <button class="domain-card" data-domain="${key}" onclick="startLearnerDomain('${key}')">
+        <button class="domain-card" data-domain="${key}" onclick="renderModuleList('${key}')">
           <div class="domain-icon">${info.icon}</div>
           <div class="domain-name">${info.name}</div>
           <div class="domain-stats">${stats}</div>
@@ -1286,9 +1291,104 @@ async function adjustLearnerDifficulty(domain, delta) {
   }
 }
 
+// ── Screen: Module List ───────────────────────────────────────────────────
+async function renderModuleList(domain) {
+  S.currentFinanceDomain = domain;
+  S.currentModuleId      = null;
+  setLoading('Loading modules...');
+  try {
+    const data = await financeApi.getModules(S.currentLearner.id, domain);
+    renderModuleListContent(data);
+  } catch (e) {
+    alert('Could not load modules — please try again.');
+    renderFinanceDashboard();
+  }
+}
+
+function renderModuleListContent(data) {
+  const info = FINANCE_DOMAIN_INFO[data.domain];
+
+  const rows = data.modules.map((m, i) => `
+    <div class="module-row ${m.unlocked ? '' : 'module-locked'} ${m.passed ? 'module-passed' : ''}"
+         ${m.unlocked ? `onclick="openModule('${data.domain}','${m.id}','${esc(m.name)}')"` : ''}>
+      <div class="module-num">${m.passed ? '✓' : i + 1}</div>
+      <div class="module-info">
+        <div class="module-name">${esc(m.name)}</div>
+        <div class="module-blurb">${esc(m.focus)}</div>
+        ${m.attempts > 0 ? `<div class="module-status">Best attempt: ${m.best_score_pct}%${m.passed ? ' · Passed ✅' : ' · Not yet passed'}</div>` : ''}
+      </div>
+      ${!m.unlocked ? '<div class="module-lock">🔒</div>' : ''}
+    </div>`).join('');
+
+  appEl.innerHTML = `
+    <div class="card">
+      <div class="q-header" style="margin-bottom:6px">
+        <span style="font-size:1.4em;margin-right:8px">${info.icon}</span>
+        <strong style="flex:1;font-size:1.15em">${esc(info.name)}</strong>
+      </div>
+      <p class="muted" style="font-size:0.9em;margin-bottom:18px">Work through each module in
+      order — read the lesson, then pass its quiz (4/5 or better) to unlock the next.</p>
+      <div class="module-list">${rows}</div>
+      <button class="btn btn-ghost btn-full mt-16" onclick="startLearnerDomain('${data.domain}')">🎲 Free Practice (mixes all unlocked modules)</button>
+    </div>
+    <button class="btn btn-ghost mt-8" onclick="renderFinanceDashboard()">← Back to dashboard</button>`;
+}
+
+// ── Screen: Module Lesson ─────────────────────────────────────────────────
+async function openModule(domain, moduleId, moduleName) {
+  S.currentFinanceDomain = domain;
+  S.currentModuleId      = moduleId;
+  S.currentModuleName    = moduleName;
+  setLoading('Preparing your lesson... 📖');
+  try {
+    const lesson = await financeApi.getLesson(S.currentLearner.id, domain, moduleId);
+    renderModuleLesson(lesson);
+  } catch (e) {
+    appEl.innerHTML = `
+      <div class="card">
+        <p style="font-size:1.5em">😕</p>
+        <p style="margin-top:8px">Couldn't load the lesson — please try again.</p>
+        <button class="btn btn-primary mt-16" onclick="openModule('${domain}','${moduleId}','${esc(moduleName)}')">Try Again</button>
+      </div>`;
+  }
+}
+
+function renderModuleLesson(lesson) {
+  const sectionsHtml = (lesson.sections || []).map(s => `
+    <div class="guide-section">
+      <h3>${esc(s.heading)}</h3>
+      <p>${esc(s.content)}</p>
+    </div>`).join('');
+
+  const takeawaysHtml = (lesson.key_takeaways && lesson.key_takeaways.length) ? `
+    <div class="expl-box mt-16">
+      <strong>🔑 Key Takeaways</strong>
+      <ul style="margin-top:8px;padding-left:20px;line-height:1.7">
+        ${lesson.key_takeaways.map(t => `<li>${esc(t)}</li>`).join('')}
+      </ul>
+    </div>` : '';
+
+  appEl.innerHTML = `
+    <div class="card">
+      <h2 style="font-size:1.5em;font-weight:900;margin-bottom:6px">${esc(lesson.title || S.currentModuleName)}</h2>
+      <p class="muted" style="margin-bottom:20px">${esc(lesson.intro || '')}</p>
+      ${sectionsHtml}
+      ${takeawaysHtml}
+      <button class="btn btn-primary btn-lg btn-full mt-24" onclick="beginModuleQuiz()">Take the Quiz →</button>
+    </div>
+    <button class="btn btn-ghost mt-8" onclick="renderModuleList('${S.currentFinanceDomain}')">← Back to modules</button>`;
+}
+
+async function beginModuleQuiz() {
+  S.financeSession = { correct: 0, total: 0, results: [] };
+  await loadNextLearnerQuestion();
+}
+
 // ── Screen: Finance Question ──────────────────────────────────────────────
 async function startLearnerDomain(domain) {
   S.currentFinanceDomain = domain;
+  S.currentModuleId      = null;   // free practice — not scoped to a module
+  S.currentModuleName    = null;
   S.financeSession       = { correct: 0, total: 0, results: [] };
   await loadNextLearnerQuestion();
 }
@@ -1296,7 +1396,7 @@ async function startLearnerDomain(domain) {
 async function loadNextLearnerQuestion() {
   setLoading('Generating your question... ✨');
   try {
-    S.currentFinanceQ = await financeApi.getQuestion(S.currentLearner.id, S.currentFinanceDomain);
+    S.currentFinanceQ = await financeApi.getQuestion(S.currentLearner.id, S.currentFinanceDomain, S.currentModuleId);
     renderLearnerQuestion();
   } catch (e) {
     appEl.innerHTML = `
@@ -1312,6 +1412,8 @@ function renderLearnerQuestion() {
   const { question, difficulty_desc } = S.currentFinanceQ;
   const info    = FINANCE_DOMAIN_INFO[S.currentFinanceDomain];
   const results = S.financeSession.results;
+  const headerLabel = S.currentModuleId ? `${esc(info.name)} · ${esc(S.currentModuleName)}` : esc(info.name);
+  const backTarget  = S.currentModuleId ? `renderModuleList('${S.currentFinanceDomain}')` : 'renderFinanceDashboard()';
 
   const dots = Array.from({ length: SESSION_LENGTH }, (_, i) => {
     if      (i < results.length)     return `<div class="pdot ${results[i] ? 'correct' : 'incorrect'}"></div>`;
@@ -1336,7 +1438,7 @@ function renderLearnerQuestion() {
     <div class="card">
       <div class="q-header">
         <span style="font-size:1.4em;margin-right:8px">${info.icon}</span>
-        <strong style="flex:1">${info.name}</strong>
+        <strong style="flex:1">${headerLabel}</strong>
         <span class="diff-badge">${esc(difficulty_desc)}</span>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px">
@@ -1345,7 +1447,7 @@ function renderLearnerQuestion() {
       </div>
       ${body}
     </div>
-    <button class="btn btn-ghost mt-8" onclick="renderFinanceDashboard()">← Back to areas</button>`;
+    <button class="btn btn-ghost mt-8" onclick="${backTarget}">← Back</button>`;
 }
 
 async function submitLearnerMCQ(key) {
@@ -1379,6 +1481,7 @@ function renderLearnerFeedback() {
   const q       = S.currentFinanceQ.question;
   const correct = feedback.is_correct;
   const isLast  = S.financeSession.results.length >= SESSION_LENGTH;
+  const backTarget = S.currentModuleId ? `renderModuleList('${S.currentFinanceDomain}')` : 'renderFinanceDashboard()';
 
   const answerBlock = `<div class="options-list" style="margin-bottom:14px">
     ${Object.entries(q.options).map(([k, v]) => {
@@ -1410,7 +1513,7 @@ function renderLearnerFeedback() {
         ${esc(feedback.explanation || '')}
       </div>
       <div class="row mt-16">
-        <button class="btn btn-ghost" onclick="renderFinanceDashboard()">📊 Dashboard</button>
+        <button class="btn btn-ghost" onclick="${backTarget}">${S.currentModuleId ? '📚 Modules' : '📊 Dashboard'}</button>
         <button class="btn btn-primary btn-lg" style="flex:2"
           onclick="${isLast ? 'renderLearnerComplete()' : 'loadNextLearnerQuestion()'}">
           ${isLast ? '🏆 See Results' : 'Next Question →'}
@@ -1420,8 +1523,21 @@ function renderLearnerFeedback() {
 }
 
 // ── Screen: Finance Session complete ───────────────────────────────────────
-function renderLearnerComplete() {
+async function renderLearnerComplete() {
   const { correct, total } = S.financeSession;
+
+  if (S.currentModuleId) {
+    setLoading('Checking your results...');
+    try {
+      const result = await financeApi.completeModule(S.currentLearner.id, S.currentFinanceDomain, S.currentModuleId, correct, total);
+      renderModuleResult(result);
+    } catch (e) {
+      alert('Could not record your result — please try again.');
+      renderModuleList(S.currentFinanceDomain);
+    }
+    return;
+  }
+
   const pct = Math.round(correct / total * 100);
   const msg = pct === 100 ? "Perfect score — excellent grasp of this area! 🎉"
             : pct >= 80   ? "Strong session — you're building real fluency here. 🎊"
@@ -1437,6 +1553,27 @@ function renderLearnerComplete() {
       <div class="row" style="justify-content:center">
         <button class="btn btn-ghost" onclick="renderFinanceDashboard()">📊 View Progress</button>
         <button class="btn btn-primary btn-lg" onclick="startLearnerDomain('${S.currentFinanceDomain}')">🔄 Practice Again</button>
+      </div>
+    </div>`;
+}
+
+function renderModuleResult(result) {
+  const { passed, score, total } = result;
+  const pct = Math.round(score / total * 100);
+  const msg = passed
+    ? "🎉 Module passed! The next module is now unlocked."
+    : `You got ${score}/${total} (${pct}%). You need at least 4/5 to pass — review the lesson and try again whenever you're ready.`;
+
+  appEl.innerHTML = `
+    <div class="card text-center" style="padding:40px">
+      <div style="font-size:3em">${passed ? '🏆' : '📘'}</div>
+      <h2 style="font-size:1.5em;font-weight:900;margin-top:8px">${passed ? 'Module Complete!' : 'Not Quite There Yet'}</h2>
+      <div class="score-big">${score}/${total}</div>
+      <p class="score-sub">${pct}% correct</p>
+      <p class="muted" style="margin-bottom:32px">${msg}</p>
+      <div class="row" style="justify-content:center">
+        <button class="btn btn-ghost" onclick="openModule('${S.currentFinanceDomain}','${S.currentModuleId}','${esc(S.currentModuleName)}')">📖 Review Lesson</button>
+        <button class="btn btn-primary btn-lg" onclick="renderModuleList('${S.currentFinanceDomain}')">📚 ${passed ? 'Next Module' : 'Back to Modules'}</button>
       </div>
     </div>`;
 }
