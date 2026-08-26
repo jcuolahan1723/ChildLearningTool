@@ -124,6 +124,124 @@ FINANCE_DOMAIN_INSTRUCTIONS = {
     ),
 }
 
+# Each domain broken into an ordered sequence of modules — a proper course
+# structure rather than a flat quiz pool. Module quizzes are scored against
+# MODULE_PASS_THRESHOLD to unlock the next module.
+MODULE_PASS_THRESHOLD = 0.8  # 4 out of 5 questions
+
+FINANCE_MODULES = {
+    "corporate_finance": [
+        {"id": "capital_budgeting", "name": "Capital Budgeting",
+         "focus": "Net present value (NPV), internal rate of return (IRR), payback period, and how companies decide which projects are worth investing in."},
+        {"id": "cost_of_capital", "name": "Cost of Capital (WACC)",
+         "focus": "The cost of debt and equity, and how to calculate and use the weighted average cost of capital (WACC) as a hurdle rate."},
+        {"id": "capital_structure", "name": "Capital Structure",
+         "focus": "The trade-offs between debt and equity financing, financial leverage, and how capital structure affects firm value and risk."},
+        {"id": "dividend_policy", "name": "Dividend Policy",
+         "focus": "How and why companies decide to pay dividends vs retain earnings, dividend theories, and share buybacks as an alternative."},
+        {"id": "working_capital", "name": "Working Capital Management",
+         "focus": "Managing short-term assets and liabilities — inventory, receivables, payables, and the cash conversion cycle."},
+        {"id": "ma_fundamentals", "name": "M&A Fundamentals",
+         "focus": "Why companies merge or acquire, deal structures, synergies, and the basics of how a deal gets valued and financed."},
+    ],
+    "financial_management": [
+        {"id": "financial_statements", "name": "Reading Financial Statements",
+         "focus": "The balance sheet, income statement, and cash flow statement — what each tells you and how they connect."},
+        {"id": "ratio_analysis", "name": "Ratio Analysis",
+         "focus": "Liquidity, profitability, leverage, and efficiency ratios, and what they reveal about a company's health."},
+        {"id": "budgeting_forecasting", "name": "Budgeting & Forecasting",
+         "focus": "How businesses build budgets and forecasts, and how to use them for planning and control."},
+        {"id": "financial_risk", "name": "Financial Risk Management",
+         "focus": "Identifying and managing key financial risks businesses face, including basic hedging concepts."},
+    ],
+    "business_economics": [
+        {"id": "supply_demand", "name": "Supply, Demand & Market Structures",
+         "focus": "How supply and demand set prices, and how competition, monopoly, and oligopoly change business behaviour."},
+        {"id": "elasticity", "name": "Price Elasticity",
+         "focus": "How responsive demand and supply are to price changes, and why it matters for business pricing decisions."},
+        {"id": "inflation_rates", "name": "Inflation & Interest Rates",
+         "focus": "What drives inflation and interest rates, and how they flow through to business costs and decisions."},
+        {"id": "business_cycles", "name": "Business Cycles & Economic Indicators",
+         "focus": "The phases of the business cycle and the key economic indicators used to read where an economy is headed."},
+    ],
+    "data_analysis": [
+        {"id": "descriptive_stats", "name": "Descriptive Statistics",
+         "focus": "Mean, median, variance, and standard deviation, and how to summarise a dataset meaningfully."},
+        {"id": "charts_dashboards", "name": "Interpreting Charts & Dashboards",
+         "focus": "Reading business dashboards and charts accurately, and spotting when a visual is misleading."},
+        {"id": "correlation_causation", "name": "Correlation vs Causation",
+         "focus": "Why correlation doesn't imply causation, and how to reason carefully about relationships in business data."},
+        {"id": "probability_conclusions", "name": "Probability & Sound Conclusions",
+         "focus": "Basic probability concepts and how to draw defensible conclusions from limited or noisy data."},
+    ],
+    "decentralised_finance": [
+        {"id": "blockchain_basics", "name": "Blockchain & Smart Contract Basics",
+         "focus": "How blockchains and smart contracts work, and why they underpin DeFi."},
+        {"id": "lending_protocols", "name": "Lending & Borrowing Protocols",
+         "focus": "How decentralised lending and borrowing platforms work, including collateralisation and liquidation."},
+        {"id": "dex_stablecoins", "name": "DEXs & Stablecoins",
+         "focus": "Decentralised exchanges, automated market makers, and how stablecoins maintain their peg."},
+        {"id": "yield_liquidity", "name": "Yield Farming & Liquidity Pools",
+         "focus": "How liquidity pools and yield farming generate returns, and the mechanics behind them."},
+        {"id": "defi_risk", "name": "DeFi Risk & Regulation",
+         "focus": "Smart contract risk, volatility, and the evolving regulatory landscape compared with traditional finance."},
+    ],
+    "robo_advice": [
+        {"id": "portfolio_construction", "name": "How Robo-Advisors Build Portfolios",
+         "focus": "Modern portfolio theory basics and how robo-advisors construct and rebalance portfolios automatically."},
+        {"id": "fees_suitability", "name": "Fee Structures & Suitability",
+         "focus": "How robo-advice is priced compared with traditional advice, and how suitability is assessed."},
+        {"id": "robo_vs_human", "name": "Robo vs Human Advice",
+         "focus": "The trade-offs between automated and human financial advice, and where each tends to fit best."},
+    ],
+    "international_finance": [
+        {"id": "exchange_rates", "name": "Exchange Rates & Currency Risk",
+         "focus": "What determines exchange rates and how currency risk affects businesses trading internationally."},
+        {"id": "hedging_instruments", "name": "Hedging Instruments",
+         "focus": "Forwards, options, and other tools businesses use to manage currency exposure."},
+        {"id": "balance_of_payments", "name": "Balance of Payments & PPP",
+         "focus": "How the balance of payments works, and what purchasing power parity tells us about currency values."},
+        {"id": "cross_border", "name": "Cross-Border Capital & M&A",
+         "focus": "Key considerations in international capital markets and cross-border M&A deals."},
+    ],
+    "private_equity_vc": [
+        {"id": "fund_structures", "name": "Fund Structures (GP/LP)",
+         "focus": "How PE and VC funds are structured, including carried interest and management fees."},
+        {"id": "funding_stages", "name": "Venture Funding Stages",
+         "focus": "The journey from seed funding through Series A, B, C and beyond."},
+        {"id": "lbos", "name": "Leveraged Buyouts (LBOs)",
+         "focus": "How an LBO works, why leverage is used, and how returns are generated."},
+        {"id": "private_valuation", "name": "Valuing Private Companies",
+         "focus": "How private companies are valued in the absence of public market prices."},
+        {"id": "exit_strategies", "name": "Exit Strategies",
+         "focus": "How PE and VC investors exit — IPOs, trade sales, and secondary sales."},
+    ],
+    "equity_valuation": [
+        {"id": "dcf", "name": "Discounted Cash Flow (DCF)",
+         "focus": "How to build and interpret a DCF valuation, including discount rates and terminal value."},
+        {"id": "comparable_companies", "name": "Comparable Company Analysis",
+         "focus": "Valuing a company by comparison with similar publicly traded peers."},
+        {"id": "precedent_transactions", "name": "Precedent Transactions",
+         "focus": "Valuing a company based on what similar companies have sold for in past deals."},
+        {"id": "valuation_multiples", "name": "Valuation Multiples",
+         "focus": "Key multiples like P/E, EV/EBITDA, and P/B, and when each is most appropriate."},
+        {"id": "ddm", "name": "Dividend Discount Model",
+         "focus": "Valuing a company based on the present value of its expected future dividends."},
+    ],
+    "fixed_income": [
+        {"id": "bond_pricing", "name": "Bond Pricing & Yield",
+         "focus": "How bonds are priced, and the relationship between price, coupon, and yield."},
+        {"id": "duration_convexity", "name": "Duration & Convexity",
+         "focus": "How bond prices respond to interest rate changes, measured through duration and convexity."},
+        {"id": "credit_ratings", "name": "Credit Ratings & Risk",
+         "focus": "How credit ratings work and what drives credit risk in a bond."},
+        {"id": "yield_curve", "name": "The Yield Curve",
+         "focus": "What the yield curve is, why its shape changes, and what it signals about the economy."},
+        {"id": "bond_types", "name": "Types of Bonds",
+         "focus": "Government, corporate, and high-yield bonds, and how they differ in risk and return."},
+    ],
+}
+
 DOMAIN_INSTRUCTIONS = {
     "reading": (
         "Generate a reading comprehension passage followed by one multiple choice question about "
@@ -233,6 +351,7 @@ class UpdateLearnerFocusRequest(BaseModel):
 class LearnerQuestionRequest(BaseModel):
     learner_id: str
     domain: str
+    module_id: Optional[str] = None
 
 
 class LearnerAnswerRequest(BaseModel):
@@ -244,6 +363,20 @@ class LearnerAnswerRequest(BaseModel):
 
 class LearnerAdjustDifficultyRequest(BaseModel):
     delta: float
+
+
+class LessonRequest(BaseModel):
+    learner_id: str
+    domain: str
+    module_id: str
+
+
+class ModuleCompleteRequest(BaseModel):
+    learner_id: str
+    domain: str
+    module_id: str
+    correct: int
+    total: int
 
 
 # --- Data helpers ---
@@ -361,10 +494,19 @@ def get_finance_domain_state(progress: dict, domain: str) -> dict:
             "sessions": [],
             "topics_covered": [],
             "recent_questions": [],
+            "module_progress": {},
         }
     state = progress["domains"][domain]
     state.setdefault("recent_questions", [])
+    state.setdefault("module_progress", {})
     return state
+
+
+def get_module_state(domain_state: dict, module_id: str) -> dict:
+    mp = domain_state.setdefault("module_progress", {})
+    if module_id not in mp:
+        mp[module_id] = {"lesson": None, "attempts": [], "passed": False}
+    return mp[module_id]
 
 
 def finance_difficulty_label(difficulty: float) -> str:
@@ -1077,15 +1219,27 @@ async def generate_learner_question(req: LearnerQuestionRequest):
 
     focus_block = f"\nLearner's focus note: {focus_note}\n" if focus_note else ""
 
+    module = None
+    if req.module_id and req.domain in FINANCE_MODULES:
+        module = next((m for m in FINANCE_MODULES[req.domain] if m["id"] == req.module_id), None)
+
+    module_line = f"Module: {module['name']}\n" if module else ""
+    task = module["focus"] if module else FINANCE_DOMAIN_INSTRUCTIONS[req.domain]
+    scope_note = (
+        "This question must test understanding specifically within this module — do not stray "
+        "into other topics from the wider course.\n"
+        if module else ""
+    )
+
     prompt = f"""You are an experienced finance educator creating a practice question for a working \
 professional building core corporate finance and business management skills — similar in spirit to \
 an introductory MBA or professional finance certification curriculum.
 
 Domain: {domain_display}
-Difficulty: {diff_desc} (scale 1.0–5.0, current: {difficulty:.1f})
+{module_line}Difficulty: {diff_desc} (scale 1.0–5.0, current: {difficulty:.1f})
 {focus_block}Recently covered topics (vary from these): {', '.join(topics_covered) if topics_covered else 'none yet'}
 {recent_block}
-Task: {FINANCE_DOMAIN_INSTRUCTIONS[req.domain]}
+{scope_note}Task: {task}
 
 Return ONLY valid JSON — no other text, no markdown fences. Use this exact schema:
 {{
@@ -1188,6 +1342,122 @@ async def submit_learner_answer(req: LearnerAnswerRequest):
         "new_difficulty": new_difficulty,
         "new_difficulty_desc": finance_difficulty_label(new_difficulty),
     }
+
+
+@app.get("/api/finance/modules/{learner_id}/{domain}")
+async def get_modules(learner_id: str, domain: str):
+    learners = load_learners()
+    learner = next((l for l in learners["learners"] if l["id"] == learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+    if domain not in FINANCE_MODULES:
+        raise HTTPException(400, "Invalid domain")
+
+    progress = load_learner_progress(learner_id)
+    state = get_finance_domain_state(progress, domain)
+    module_progress = state.get("module_progress", {})
+
+    result = []
+    prev_passed = True  # the first module in a domain is always unlocked
+    for m in FINANCE_MODULES[domain]:
+        mp = module_progress.get(m["id"], {})
+        passed = mp.get("passed", False)
+        attempts = mp.get("attempts", [])
+        best = max((a["score"] / a["total"] for a in attempts), default=0)
+        result.append({
+            "id": m["id"],
+            "name": m["name"],
+            "focus": m["focus"],
+            "unlocked": prev_passed,
+            "passed": passed,
+            "attempts": len(attempts),
+            "best_score_pct": round(best * 100) if attempts else None,
+            "has_lesson": mp.get("lesson") is not None,
+        })
+        prev_passed = passed
+
+    return {"learner": learner, "domain": domain, "modules": result}
+
+
+@app.post("/api/finance/lesson")
+async def get_module_lesson(req: LessonRequest):
+    learners = load_learners()
+    learner = next((l for l in learners["learners"] if l["id"] == req.learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+    if req.domain not in FINANCE_MODULES:
+        raise HTTPException(400, "Invalid domain")
+    module = next((m for m in FINANCE_MODULES[req.domain] if m["id"] == req.module_id), None)
+    if not module:
+        raise HTTPException(404, "Module not found")
+
+    progress = load_learner_progress(req.learner_id)
+    state = get_finance_domain_state(progress, req.domain)
+    mp = get_module_state(state, req.module_id)
+
+    if mp.get("lesson"):
+        return mp["lesson"]  # cached — don't regenerate on every revisit
+
+    domain_display = req.domain.replace("_", " ").title()
+    prompt = f"""You are an experienced MBA-level finance educator writing a course lesson.
+
+Course: {domain_display}
+Module: {module['name']}
+Module focus: {module['focus']}
+
+Write a structured lesson introducing this module's key concepts to a working professional with \
+no assumed prior background beyond general business awareness. Include the core concepts, the key \
+methods or formulas involved with clear reasoning for why they matter and how they're used in \
+practice, and a short concrete worked example grounded in a realistic business scenario.
+
+Return ONLY valid JSON — no other text, no markdown fences. Use this exact schema:
+{{
+  "title": "{module['name']}",
+  "intro": "1-2 sentence hook on why this module matters in practice",
+  "sections": [
+    {{"heading": "...", "content": "..."}},
+    {{"heading": "...", "content": "..."}},
+    {{"heading": "Worked Example", "content": "a concrete numeric example a professional would recognise"}}
+  ],
+  "key_takeaways": ["short takeaway 1", "short takeaway 2", "short takeaway 3"]
+}}
+
+Use 3-5 sections total. Keep each section's content substantive but concise (roughly 80-150 words)."""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    lesson = parse_claude_json(message.content[0].text)
+    mp["lesson"] = lesson
+    save_learner_progress(req.learner_id, progress)
+    return lesson
+
+
+@app.post("/api/finance/module-complete")
+async def complete_module(req: ModuleCompleteRequest):
+    learners = load_learners()
+    learner = next((l for l in learners["learners"] if l["id"] == req.learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+
+    progress = load_learner_progress(req.learner_id)
+    state = get_finance_domain_state(progress, req.domain)
+    mp = get_module_state(state, req.module_id)
+
+    passed = req.total > 0 and (req.correct / req.total) >= MODULE_PASS_THRESHOLD
+    mp.setdefault("attempts", []).append({
+        "score": req.correct,
+        "total": req.total,
+        "passed": passed,
+        "timestamp": datetime.now().isoformat(),
+    })
+    if passed:
+        mp["passed"] = True
+
+    save_learner_progress(req.learner_id, progress)
+    return {"passed": passed, "score": req.correct, "total": req.total}
 
 
 @app.post("/api/finance/difficulty/{learner_id}/{domain}")
