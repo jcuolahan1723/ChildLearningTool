@@ -31,11 +31,98 @@ if not os.path.exists(CHILDREN_FILE):
     with open(CHILDREN_FILE, "w") as f:
         json.dump({"children": []}, f)
 
+# Finance Training track — fully separate storage from the kids' data, same
+# persistence approach (lives under DATA_DIR, so it survives Azure restarts too).
+FINANCE_DIR = os.path.join(DATA_DIR, "finance")
+FINANCE_PROGRESS_DIR = os.path.join(FINANCE_DIR, "progress")
+LEARNERS_FILE = os.path.join(FINANCE_DIR, "learners.json")
+
+os.makedirs(FINANCE_PROGRESS_DIR, exist_ok=True)
+
+if not os.path.exists(LEARNERS_FILE):
+    with open(LEARNERS_FILE, "w") as f:
+        json.dump({"learners": []}, f)
+
 client = anthropic.Anthropic()
 
 DOMAINS = ["reading", "phonemics", "numeracy", "language_conventions", "writing"]
 
 FUN_BREAK_KINDS = ["did_you_know", "dad_joke", "riddle"]
+
+# ── Finance Training track ──────────────────────────────────────────────────
+FINANCE_DOMAINS = [
+    "corporate_finance",
+    "financial_management",
+    "business_economics",
+    "data_analysis",
+    "decentralised_finance",
+    "robo_advice",
+    "international_finance",
+    "private_equity_vc",
+    "equity_valuation",
+    "fixed_income",
+]
+
+FINANCE_CORE_DOMAIN = "corporate_finance"
+
+FINANCE_DOMAIN_INSTRUCTIONS = {
+    "corporate_finance": (
+        "Cover core corporate finance: capital budgeting (NPV, IRR, payback period), cost of "
+        "capital (WACC), capital structure (debt vs equity trade-offs), dividend policy, working "
+        "capital management, and M&A fundamentals. Vary across these sub-areas rather than "
+        "repeating the same one each time."
+    ),
+    "financial_management": (
+        "Cover financial management: reading and analysing financial statements (balance sheet, "
+        "income statement, cash flow statement), ratio analysis (liquidity, profitability, "
+        "leverage, efficiency), budgeting and forecasting, and financial risk management basics."
+    ),
+    "business_economics": (
+        "Cover business economics: supply and demand, market structures (perfect competition, "
+        "monopoly, oligopoly), price elasticity, inflation and interest rates, business cycles, "
+        "and how key economic indicators should inform business strategy and decision-making."
+    ),
+    "data_analysis": (
+        "Cover introductory business data analysis: descriptive statistics (mean, median, "
+        "variance, standard deviation), interpreting charts and dashboards, correlation vs "
+        "causation, basic probability, and drawing sound conclusions from data — the level of "
+        "reasoning needed to interpret a business report or KPI dashboard, not advanced statistics."
+    ),
+    "decentralised_finance": (
+        "Cover decentralised finance (DeFi) fundamentals: how blockchain and smart contracts "
+        "underpin DeFi, lending/borrowing protocols, decentralised exchanges, stablecoins, yield "
+        "farming and liquidity pools, and the key risks (smart contract risk, volatility, "
+        "regulation) compared with traditional finance."
+    ),
+    "robo_advice": (
+        "Cover robo-advice: how automated investment platforms build and rebalance portfolios "
+        "(e.g. using modern portfolio theory), typical fee structures vs traditional advisors, "
+        "suitability and regulatory considerations, and the trade-offs between robo-advice and "
+        "human financial advice."
+    ),
+    "international_finance": (
+        "Cover international finance: exchange rate determination and currency risk, hedging "
+        "instruments (forwards, options), the balance of payments, purchasing power parity, "
+        "international capital markets, and considerations in cross-border business or M&A."
+    ),
+    "private_equity_vc": (
+        "Cover private equity and venture capital: fund structures (GP/LP, carried interest, "
+        "management fees), venture funding stages (seed through Series A-C and beyond), "
+        "leveraged buyouts (LBOs), valuation approaches for private companies, and typical exit "
+        "strategies (IPO, trade sale, secondary sale)."
+    ),
+    "equity_valuation": (
+        "Cover equity valuation methods: discounted cash flow (DCF) analysis, comparable company "
+        "analysis, precedent transaction analysis, key valuation multiples (P/E, EV/EBITDA, P/B), "
+        "and the dividend discount model — including when each method is most appropriate."
+    ),
+    "fixed_income": (
+        "Cover fixed income fundamentals: bond pricing and yield, duration and convexity, the "
+        "relationship between interest rates and bond prices, credit ratings and credit risk, the "
+        "yield curve and what it signals, and the main types of bonds (government, corporate, "
+        "high-yield)."
+    ),
+}
 
 DOMAIN_INSTRUCTIONS = {
     "reading": (
@@ -122,6 +209,43 @@ class UpdateFocusRequest(BaseModel):
     starting_levels: Optional[dict] = None
 
 
+# --- Finance Training models ---
+
+class Learner(BaseModel):
+    name: str
+    avatar: Optional[str] = None
+    active_domains: Optional[List[str]] = None
+    starting_levels: Optional[dict] = None
+    focus_note: Optional[str] = None
+
+
+class UpdateLearnerRequest(BaseModel):
+    name: Optional[str] = None
+    avatar: Optional[str] = None
+
+
+class UpdateLearnerFocusRequest(BaseModel):
+    active_domains: List[str]
+    focus_note: Optional[str] = None
+    starting_levels: Optional[dict] = None
+
+
+class LearnerQuestionRequest(BaseModel):
+    learner_id: str
+    domain: str
+
+
+class LearnerAnswerRequest(BaseModel):
+    learner_id: str
+    domain: str
+    question_data: dict
+    answer: str
+
+
+class LearnerAdjustDifficultyRequest(BaseModel):
+    delta: float
+
+
 # --- Data helpers ---
 
 def age_to_year_level(age: int) -> int:
@@ -198,6 +322,62 @@ def difficulty_label(difficulty: float, year_level: int) -> str:
         return f"Advanced (Yr {year_level + 2})"
     else:
         return f"Extension (Yr {year_level + 3}+)"
+
+
+# --- Finance Training data helpers ---
+
+def load_learners() -> dict:
+    with open(LEARNERS_FILE) as f:
+        return json.load(f)
+
+
+def save_learners(data: dict) -> None:
+    with open(LEARNERS_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def load_learner_progress(learner_id: str) -> dict:
+    path = os.path.join(FINANCE_PROGRESS_DIR, f"{learner_id}.json")
+    if not os.path.exists(path):
+        return {"learner_id": learner_id, "domains": {}}
+    with open(path) as f:
+        return json.load(f)
+
+
+def save_learner_progress(learner_id: str, progress: dict) -> None:
+    path = os.path.join(FINANCE_PROGRESS_DIR, f"{learner_id}.json")
+    with open(path, "w") as f:
+        json.dump(progress, f, indent=2)
+
+
+def get_finance_domain_state(progress: dict, domain: str) -> dict:
+    progress.setdefault("domains", {})
+    if domain not in progress["domains"]:
+        progress["domains"][domain] = {
+            "difficulty": 2.0,
+            "total_questions": 0,
+            "correct": 0,
+            "recent_results": [],
+            "sessions": [],
+            "topics_covered": [],
+            "recent_questions": [],
+        }
+    state = progress["domains"][domain]
+    state.setdefault("recent_questions", [])
+    return state
+
+
+def finance_difficulty_label(difficulty: float) -> str:
+    if difficulty < 1.5:
+        return "Beginner"
+    elif difficulty < 2.5:
+        return "Practitioner"
+    elif difficulty < 3.5:
+        return "Proficient"
+    elif difficulty < 4.5:
+        return "Advanced"
+    else:
+        return "Expert"
 
 
 def parse_claude_json(text: str) -> dict:
@@ -698,6 +878,335 @@ async def adjust_difficulty(child_id: str, domain: str, req: AdjustDifficultyReq
     state["difficulty"] = round(max(1.0, min(5.0, current + req.delta)), 2)
 
     save_progress(child_id, progress)
+    return {"difficulty": state["difficulty"]}
+
+
+# ── Finance Training routes ──────────────────────────────────────────────
+
+@app.get("/api/finance/learners")
+async def get_learners():
+    return load_learners()
+
+
+@app.post("/api/finance/learners")
+async def add_learner(learner: Learner):
+    data = load_learners()
+
+    active_domains = [d for d in (learner.active_domains or [FINANCE_CORE_DOMAIN]) if d in FINANCE_DOMAINS]
+    if not active_domains:
+        active_domains = [FINANCE_CORE_DOMAIN]
+
+    new_learner = {
+        "id": str(uuid.uuid4()),
+        "name": learner.name,
+        "avatar": learner.avatar or "💼",
+        "active_domains": active_domains,
+        "focus_note": (learner.focus_note or "").strip(),
+        "created_at": datetime.now().isoformat(),
+    }
+    data["learners"].append(new_learner)
+    save_learners(data)
+
+    if learner.starting_levels:
+        progress = load_learner_progress(new_learner["id"])
+        level_map = {"beginner": 1.3, "practitioner": 2.0, "advanced": 3.0}
+        for domain, level_key in learner.starting_levels.items():
+            if domain in active_domains:
+                state = get_finance_domain_state(progress, domain)
+                state["difficulty"] = level_map.get(level_key, 2.0)
+        save_learner_progress(new_learner["id"], progress)
+
+    return new_learner
+
+
+@app.put("/api/finance/learners/{learner_id}")
+async def update_learner(learner_id: str, req: UpdateLearnerRequest):
+    data = load_learners()
+    learner = next((l for l in data["learners"] if l["id"] == learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+
+    if req.name is not None and req.name.strip():
+        learner["name"] = req.name.strip()
+    if req.avatar is not None:
+        learner["avatar"] = req.avatar
+
+    save_learners(data)
+    return learner
+
+
+@app.put("/api/finance/learners/{learner_id}/focus")
+async def update_learner_focus(learner_id: str, req: UpdateLearnerFocusRequest):
+    data = load_learners()
+    learner = next((l for l in data["learners"] if l["id"] == learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+
+    valid_domains = [d for d in req.active_domains if d in FINANCE_DOMAINS]
+    if not valid_domains:
+        raise HTTPException(400, "At least one focus area is required")
+
+    learner["active_domains"] = valid_domains
+    if req.focus_note is not None:
+        learner["focus_note"] = req.focus_note.strip()
+    save_learners(data)
+
+    if req.starting_levels:
+        progress = load_learner_progress(learner_id)
+        level_map = {"beginner": 1.3, "practitioner": 2.0, "advanced": 3.0}
+        for domain, level_key in req.starting_levels.items():
+            if domain not in FINANCE_DOMAINS:
+                continue
+            state = get_finance_domain_state(progress, domain)
+            # Only seed difficulty for a domain not yet practiced — never overwrite
+            # a difficulty that's already adapted to real answers.
+            if state.get("total_questions", 0) == 0:
+                state["difficulty"] = level_map.get(level_key, 2.0)
+        save_learner_progress(learner_id, progress)
+
+    return learner
+
+
+@app.delete("/api/finance/learners/{learner_id}")
+async def delete_learner(learner_id: str):
+    data = load_learners()
+    data["learners"] = [l for l in data["learners"] if l["id"] != learner_id]
+    save_learners(data)
+    return {"ok": True}
+
+
+@app.get("/api/finance/progress/{learner_id}")
+async def get_learner_progress(learner_id: str):
+    learners = load_learners()
+    learner = next((l for l in learners["learners"] if l["id"] == learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+
+    progress = load_learner_progress(learner_id)
+    result: dict = {"learner": learner, "domains": {}}
+
+    for domain in FINANCE_DOMAINS:
+        state = get_finance_domain_state(progress, domain)
+        total = state.get("total_questions", 0)
+        correct = state.get("correct", 0)
+        result["domains"][domain] = {
+            "difficulty": state["difficulty"],
+            "difficulty_desc": finance_difficulty_label(state["difficulty"]),
+            "total_questions": total,
+            "correct": correct,
+            "accuracy": round(correct / total * 100) if total > 0 else 0,
+            "recent_results": state.get("recent_results", [])[-5:],
+        }
+    return result
+
+
+@app.get("/api/finance/history/{learner_id}")
+async def get_learner_history(learner_id: str):
+    learners = load_learners()
+    learner = next((l for l in learners["learners"] if l["id"] == learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+
+    progress = load_learner_progress(learner_id)
+    history: dict = {}
+
+    for domain in FINANCE_DOMAINS:
+        state = progress.get("domains", {}).get(domain)
+        sessions = state.get("sessions", []) if state else []
+        if not sessions:
+            continue
+
+        topic_stats: dict = {}
+        for s in sessions:
+            topic = s.get("topic") or "general"
+            ts = topic_stats.setdefault(topic, {"correct": 0, "total": 0})
+            ts["total"] += 1
+            if s.get("is_correct"):
+                ts["correct"] += 1
+
+        topics = [
+            {
+                "topic": t,
+                "correct": v["correct"],
+                "total": v["total"],
+                "accuracy": round(v["correct"] / v["total"] * 100),
+            }
+            for t, v in topic_stats.items()
+        ]
+        topics.sort(key=lambda x: (x["accuracy"], -x["total"]))
+        improvement_areas = [t for t in topics if t["total"] >= 2 and t["accuracy"] < 70][:5]
+
+        total = state.get("total_questions", 0)
+        correct = state.get("correct", 0)
+
+        history[domain] = {
+            "total_questions": total,
+            "correct": correct,
+            "accuracy": round(correct / total * 100) if total > 0 else 0,
+            "topics": topics,
+            "improvement_areas": improvement_areas,
+            "recent_sessions": list(reversed(sessions))[:15],
+        }
+
+    return {"learner": learner, "history": history}
+
+
+@app.post("/api/finance/question")
+async def generate_learner_question(req: LearnerQuestionRequest):
+    learners = load_learners()
+    learner = next((l for l in learners["learners"] if l["id"] == req.learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+
+    progress = load_learner_progress(req.learner_id)
+    state = get_finance_domain_state(progress, req.domain)
+    difficulty = state["difficulty"]
+    diff_desc = finance_difficulty_label(difficulty)
+    topics_covered = state.get("topics_covered", [])[-10:]
+    recent_questions = state.get("recent_questions", [])[-12:]
+    domain_display = req.domain.replace("_", " ").title()
+    focus_note = (learner.get("focus_note") or "").strip()
+
+    recent_block = ""
+    if recent_questions:
+        numbered = "\n".join(f"- {q}" for q in recent_questions)
+        recent_block = (
+            "\n\nDo NOT repeat, closely rephrase, or reuse the same scenario/numbers as any of "
+            f"these recently used questions for this learner — it must be genuinely different:\n{numbered}\n"
+        )
+
+    focus_block = f"\nLearner's focus note: {focus_note}\n" if focus_note else ""
+
+    prompt = f"""You are an experienced finance educator creating a practice question for a working \
+professional building core corporate finance and business management skills — similar in spirit to \
+an introductory MBA or professional finance certification curriculum.
+
+Domain: {domain_display}
+Difficulty: {diff_desc} (scale 1.0–5.0, current: {difficulty:.1f})
+{focus_block}Recently covered topics (vary from these): {', '.join(topics_covered) if topics_covered else 'none yet'}
+{recent_block}
+Task: {FINANCE_DOMAIN_INSTRUCTIONS[req.domain]}
+
+Return ONLY valid JSON — no other text, no markdown fences. Use this exact schema:
+{{
+  "type": "multiple_choice",
+  "passage": null (or a short scenario/case-study paragraph if it adds useful context, otherwise null),
+  "question": "question text",
+  "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
+  "correct_answer": "A",
+  "explanation": "why this answer is correct, and briefly why the main distractor is wrong (2-3 sentences)",
+  "topic": "one-word or short topic tag, e.g. wacc, npv, hedging, dcf"
+}}
+
+Make it practical and grounded in realistic business scenarios — plausible company names, figures, \
+and situations a working professional would actually encounter — not abstract textbook toy examples."""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    question_data = parse_claude_json(message.content[0].text)
+
+    topic = question_data.get("topic", "")
+    if topic:
+        covered = state.get("topics_covered", [])
+        if topic not in covered:
+            covered.append(topic)
+        state["topics_covered"] = covered[-20:]
+
+    q_text = question_data.get("question", "") or ""
+    passage = question_data.get("passage") or ""
+    if passage:
+        q_text = f"{passage[:80]}... {q_text}"
+    if q_text:
+        recent_qs = state.get("recent_questions", [])
+        recent_qs.append(q_text)
+        state["recent_questions"] = recent_qs[-15:]
+
+    save_learner_progress(req.learner_id, progress)
+
+    return {
+        "question": question_data,
+        "difficulty": difficulty,
+        "difficulty_desc": diff_desc,
+    }
+
+
+@app.post("/api/finance/answer")
+async def submit_learner_answer(req: LearnerAnswerRequest):
+    learners = load_learners()
+    learner = next((l for l in learners["learners"] if l["id"] == req.learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+
+    progress = load_learner_progress(req.learner_id)
+    state = get_finance_domain_state(progress, req.domain)
+    question_data = req.question_data
+    answer = req.answer.strip()
+
+    correct = question_data.get("correct_answer", "").strip().upper()
+    is_correct = answer.upper() == correct
+    feedback = {
+        "is_correct": is_correct,
+        "correct_answer": correct,
+        "explanation": question_data.get("explanation", ""),
+        "feedback": None,
+        "encouragement": "Nice work — solid grasp of that one." if is_correct else "Not quite — worth a re-read of the explanation.",
+        "score": 1 if is_correct else 0,
+        "max_score": 1,
+    }
+
+    state["total_questions"] = state.get("total_questions", 0) + 1
+    if is_correct:
+        state["correct"] = state.get("correct", 0) + 1
+
+    old_difficulty = state["difficulty"]
+    update_difficulty(state, is_correct)
+    new_difficulty = state["difficulty"]
+
+    state.setdefault("sessions", []).append({
+        "timestamp": datetime.now().isoformat(),
+        "domain": req.domain,
+        "topic": question_data.get("topic", ""),
+        "is_correct": is_correct,
+        "difficulty": old_difficulty,
+    })
+    state["sessions"] = state["sessions"][-200:]
+
+    save_learner_progress(req.learner_id, progress)
+
+    diff_changed = None
+    if new_difficulty > old_difficulty + 0.05:
+        diff_changed = "up"
+    elif new_difficulty < old_difficulty - 0.05:
+        diff_changed = "down"
+
+    return {
+        "feedback": feedback,
+        "difficulty_changed": diff_changed,
+        "new_difficulty": new_difficulty,
+        "new_difficulty_desc": finance_difficulty_label(new_difficulty),
+    }
+
+
+@app.post("/api/finance/difficulty/{learner_id}/{domain}")
+async def adjust_learner_difficulty(learner_id: str, domain: str, req: LearnerAdjustDifficultyRequest):
+    learners = load_learners()
+    learner = next((l for l in learners["learners"] if l["id"] == learner_id), None)
+    if not learner:
+        raise HTTPException(404, "Learner not found")
+
+    if domain not in FINANCE_DOMAINS:
+        raise HTTPException(400, "Invalid domain")
+
+    progress = load_learner_progress(learner_id)
+    state = get_finance_domain_state(progress, domain)
+
+    current = state["difficulty"]
+    state["difficulty"] = round(max(1.0, min(5.0, current + req.delta)), 2)
+
+    save_learner_progress(learner_id, progress)
     return {"difficulty": state["difficulty"]}
 
 
