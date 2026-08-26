@@ -4,7 +4,7 @@
 const SESSION_LENGTH = 5;
 const BREAK_INTERVAL = 3; // show a fun break after every N questions answered
 
-const AVATARS = ['🦘','🐨','🦜','🐙','🦁','🐸','🦊','🐼','🦋','🐬'];
+const AVATARS = ['🦘','🐨','🦜','🐙','🦁','🐸','🦊','🐼','🦋','🐬','💼','📊','🎯','💡','🧠'];
 
 const DOMAIN_INFO = {
   reading:              { name: 'Reading',             icon: '📚', short: 'Reading' },
@@ -14,8 +14,25 @@ const DOMAIN_INFO = {
   writing:              { name: 'Writing',             icon: '📝', short: 'Writing' },
 };
 
+const FINANCE_DOMAIN_INFO = {
+  corporate_finance:     { name: 'Corporate Finance',            icon: '🏛️', short: 'Corp Finance' },
+  financial_management:  { name: 'Financial Management',         icon: '📈', short: 'Fin Mgmt'     },
+  business_economics:    { name: 'Business Economics',           icon: '📉', short: 'Economics'    },
+  data_analysis:         { name: 'Introductory Data Analysis',   icon: '📊', short: 'Data'         },
+  decentralised_finance: { name: 'Decentralised Finance',        icon: '🔗', short: 'DeFi'          },
+  robo_advice:           { name: 'Robo-Advice',                  icon: '🤖', short: 'Robo-Advice'  },
+  international_finance: { name: 'International Finance',        icon: '🌏', short: 'Intl Finance' },
+  private_equity_vc:     { name: 'Private Equity & VC',          icon: '💰', short: 'PE & VC'       },
+  equity_valuation:      { name: 'Equity Valuation',             icon: '⚖️', short: 'Valuation'    },
+  fixed_income:          { name: 'Fixed Income',                 icon: '💵', short: 'Fixed Income' },
+};
+
+const FINANCE_CORE_DOMAIN = 'corporate_finance';
+const FINANCE_LEVEL_LABELS = { beginner: 'Beginner', practitioner: 'Practitioner', advanced: 'Advanced' };
+
 // ── State ──────────────────────────────────────────────────────────────────
 const S = {
+  mode:          localStorage.getItem('tutortool_mode') || 'kids', // 'kids' | 'finance'
   children:      [],
   currentChild:  null,
   progress:      null,
@@ -23,6 +40,14 @@ const S = {
   currentQ:      null,   // { question, difficulty, difficulty_desc }
   lastResult:    null,   // response from /api/answer
   session:       { correct: 0, total: 0, results: [] },
+  // Finance track — mirrors the above, kept entirely separate
+  learners:            [],
+  currentLearner:       null,
+  financeProgress:      null,
+  currentFinanceDomain: null,
+  currentFinanceQ:      null,
+  lastFinanceResult:    null,
+  financeSession:       { correct: 0, total: 0, results: [] },
 };
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
@@ -52,6 +77,22 @@ const api = {
   adjustDifficulty: (cid, domain, delta) => api.json(`/api/difficulty/${cid}/${domain}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({delta}) }),
   getFunBreak: (cid) => api.json(`/api/funbreak/${cid}`),
   getHistory: (cid) => api.json(`/api/history/${cid}`),
+};
+
+// ── Finance API ────────────────────────────────────────────────────────────
+const financeApi = {
+  getLearners:  ()              => api.json('/api/finance/learners'),
+  addLearner:   (name, avatar, active_domains, starting_levels, focus_note) =>
+    api.json('/api/finance/learners', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, avatar, active_domains, starting_levels, focus_note}) }),
+  deleteLearner: (id)           => api.json(`/api/finance/learners/${id}`, { method:'DELETE' }),
+  updateLearner: (id, updates)  => api.json(`/api/finance/learners/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) }),
+  updateFocus:  (id, updates)   => api.json(`/api/finance/learners/${id}/focus`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) }),
+  getProgress:  (id)            => api.json(`/api/finance/progress/${id}`),
+  getHistory:   (id)            => api.json(`/api/finance/history/${id}`),
+  getQuestion:  (lid, domain)   => api.json('/api/finance/question', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({learner_id:lid, domain}) }),
+  submitAnswer: (lid, domain, qdata, answer) => api.json('/api/finance/answer', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({learner_id:lid, domain, question_data:qdata, answer}) }),
+  adjustDifficulty: (lid, domain, delta) => api.json(`/api/finance/difficulty/${lid}/${domain}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({delta}) }),
 };
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -92,13 +133,16 @@ function ageOptionsHtml(selectedAge) {
 
 const LEVEL_LABELS = { support: 'Needs support', level: 'About right', challenge: 'Ready for more' };
 
-function focusAreaListHtml(preselectedDomains, preselectedLevels) {
+function focusAreaListHtml(preselectedDomains, preselectedLevels, domainInfoMap, levelLabelsMap) {
   preselectedDomains = preselectedDomains || [];
   preselectedLevels  = preselectedLevels  || {};
-  return Object.entries(DOMAIN_INFO).map(([key, info]) => {
+  domainInfoMap      = domainInfoMap      || DOMAIN_INFO;
+  levelLabelsMap      = levelLabelsMap     || LEVEL_LABELS;
+  const defaultLevel = Object.keys(levelLabelsMap)[1]; // the "middle" option
+  return Object.entries(domainInfoMap).map(([key, info]) => {
     const checked = preselectedDomains.includes(key);
-    const level   = preselectedLevels[key] || 'level';
-    const levelBtns = Object.entries(LEVEL_LABELS).map(([lk, label]) => `
+    const level   = preselectedLevels[key] || defaultLevel;
+    const levelBtns = Object.entries(levelLabelsMap).map(([lk, label]) => `
         <button type="button" class="level-opt ${lk === level ? 'selected' : ''}"
           data-level="${lk}" onclick="selectLevel(this)">${label}</button>`).join('');
     return `
@@ -144,8 +188,9 @@ function getFocusSelections() {
     if (cb.checked) {
       const domain = cb.dataset.domain;
       active_domains.push(domain);
-      const sel = document.querySelector(`#level-${domain} .level-opt.selected`);
-      starting_levels[domain] = sel ? sel.dataset.level : 'level';
+      const picker = document.getElementById(`level-${domain}`);
+      const sel = picker?.querySelector('.level-opt.selected') || picker?.querySelector('.level-opt');
+      starting_levels[domain] = sel ? sel.dataset.level : null;
     }
   });
   return { active_domains, starting_levels };
@@ -160,12 +205,33 @@ function goHome() {
   S.currentChild  = null;
   S.currentDomain = null;
   S.session       = { correct: 0, total: 0, results: [] };
+  S.currentLearner       = null;
+  S.currentFinanceDomain = null;
+  S.financeSession       = { correct: 0, total: 0, results: [] };
   homeBtn.classList.add('hidden');
-  renderHome();
+  if (S.mode === 'parents') renderParentsHome(); else renderHome();
+}
+
+function setMode(mode) {
+  if (S.mode === mode) return;
+  S.mode = mode;
+  localStorage.setItem('tutortool_mode', mode);
+  updateModeToggleUI();
+  goHome();
+}
+
+function updateModeToggleUI() {
+  document.getElementById('mode-btn-kids')?.classList.toggle('active', S.mode === 'kids');
+  document.getElementById('mode-btn-parents')?.classList.toggle('active', S.mode === 'parents');
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────
 async function init() {
+  updateModeToggleUI();
+  if (S.mode === 'parents') {
+    renderParentsHome();
+    return;
+  }
   setLoading('Loading...');
   try {
     const data = await api.getChildren();
@@ -955,6 +1021,593 @@ async function adjustDifficulty(domain, delta) {
   } catch (e) {
     alert('Error adjusting difficulty — please try again.');
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FINANCE TRAINING TRACK — separate from the kids' section above, but reuses
+// the same shared helpers (esc, setLoading, avatarPickerHtml, focusAreaListHtml,
+// getFocusSelections, selectLevel/toggleFocusLevel, modal CSS classes, etc.)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function avatarForLearner(learner) {
+  if (learner.avatar) return learner.avatar;
+  const idx = S.learners.findIndex(l => l.id === learner.id);
+  return AVATARS[(idx >= 0 ? idx : 0) % AVATARS.length];
+}
+
+// ── Screen: Parents Home (topic picker) ──────────────────────────────────
+function renderParentsHome() {
+  homeBtn.classList.add('hidden');
+  appEl.innerHTML = `
+    <div class="text-center" style="margin-bottom:32px">
+      <h1 style="font-size:2.2em;font-weight:900;color:#4F46E5">🎓 Parents Area</h1>
+      <p class="muted mt-8">Your own professional development, kept separate from the kids' learning</p>
+    </div>
+    <div class="card">
+      <h2 style="font-size:1.2em;font-weight:800;margin-bottom:4px">Choose a topic</h2>
+      <p class="muted" style="font-size:0.9em;margin-bottom:16px">More topics can be added here over time</p>
+      <div class="children-grid">
+        <div class="child-card" onclick="enterFinanceTraining()">
+          <div class="child-avatar">💼</div>
+          <div class="child-name">Finance Training</div>
+          <div class="child-meta">Core finance &amp; business management</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function enterFinanceTraining() {
+  setLoading('Loading...');
+  homeBtn.classList.remove('hidden');
+  try {
+    const data = await financeApi.getLearners();
+    S.learners = data.learners || [];
+    renderFinanceHome();
+  } catch (e) {
+    appEl.innerHTML = `
+      <div class="card text-center">
+        <p style="font-size:2.5em">⚠️</p>
+        <p style="margin-top:8px">Could not connect to the server.<br>Make sure the app is running.</p>
+        <button class="btn btn-primary mt-16" onclick="enterFinanceTraining()">Try Again</button>
+      </div>`;
+  }
+}
+
+// ── Screen: Finance Home ─────────────────────────────────────────────────
+function renderFinanceHome() {
+  homeBtn.classList.remove('hidden'); // one level below Parents Home now — "← Home" returns to the topic picker
+
+  const cards = S.learners.length === 0
+    ? `<div class="card text-center" style="padding:36px">
+         <p style="font-size:3em">💼</p>
+         <p class="muted mt-8">No profiles yet.<br>Click <strong>Add Learner</strong> to get started!</p>
+       </div>`
+    : `<div class="children-grid">
+         ${S.learners.map(l => `
+           <div class="child-card" onclick="selectLearner('${l.id}')">
+             <button class="child-delete" onclick="onDeleteLearner(event,'${l.id}')" title="Remove">×</button>
+             <div class="child-avatar">${avatarForLearner(l)}</div>
+             <div class="child-name">${esc(l.name)}</div>
+             <div class="child-meta">Professional Finance Training</div>
+           </div>`).join('')}
+       </div>`;
+
+  appEl.innerHTML = `
+    <div class="text-center" style="margin-bottom:32px">
+      <h1 style="font-size:2.2em;font-weight:900;color:#4F46E5">💼 Finance Training</h1>
+      <p class="muted mt-8">Core finance management education, built around Corporate Finance
+      with electives to explore and adapt over time</p>
+      <p class="muted" style="font-size:0.8em;margin-top:6px">Educational practice content only
+      — not personal financial or investment advice.</p>
+    </div>
+    <div class="card">
+      <div class="row" style="align-items:center;margin-bottom:4px">
+        <div>
+          <h2 style="font-size:1.2em;font-weight:800">Who's training?</h2>
+          <p class="muted" style="font-size:0.9em;margin-top:4px">Pick a profile to continue</p>
+        </div>
+        <div style="flex:0">
+          <button class="btn btn-primary" onclick="showAddLearnerModal()">+ Add Learner</button>
+        </div>
+      </div>
+      ${cards}
+    </div>`;
+}
+
+async function selectLearner(id) {
+  setLoading('Loading progress...');
+  homeBtn.classList.remove('hidden');
+  try {
+    const prog = await financeApi.getProgress(id);
+    S.currentLearner  = prog.learner;
+    S.financeProgress = prog;
+    renderFinanceDashboard();
+  } catch (e) {
+    alert('Could not load progress — please try again.');
+    renderFinanceHome();
+  }
+}
+
+async function onDeleteLearner(e, id) {
+  e.stopPropagation();
+  const l = S.learners.find(x => x.id === id);
+  if (!confirm(`Remove ${l?.name ?? 'this profile'}? Their progress will be lost.`)) return;
+  try {
+    await financeApi.deleteLearner(id);
+    S.learners = S.learners.filter(x => x.id !== id);
+    renderFinanceHome();
+  } catch { alert('Error removing profile.'); }
+}
+
+// ── Modal: Add Learner (Finance) ─────────────────────────────────────────
+function showAddLearnerModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'add-learner-modal';
+
+  overlay.innerHTML = `
+    <div class="modal modal-guide">
+      <h2 class="modal-title">➕ Add a Learner</h2>
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input class="form-input" id="ml-name" type="text" placeholder="e.g. Jason" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Choose an Avatar</label>
+        ${avatarPickerHtml('ml-avatar-picker', '💼')}
+      </div>
+      <div class="form-group">
+        <label class="form-label">Focus Areas — what should we start with?</label>
+        <p class="muted" style="font-size:0.85em;margin-bottom:10px"><strong>Corporate Finance</strong>
+        is the core area and is ticked by default. Tick any electives to start now — you can add
+        more any time. Pick the level that fits best for each.</p>
+        <div class="focus-area-list">${focusAreaListHtml([FINANCE_CORE_DOMAIN], {}, FINANCE_DOMAIN_INFO, FINANCE_LEVEL_LABELS)}</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Anything specific? <span class="muted" style="font-weight:400">(optional)</span></label>
+        <textarea class="form-input" id="ml-focus-note" rows="2" placeholder="e.g. want to get better at valuation for work conversations..."></textarea>
+      </div>
+      <div class="row mt-24">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:2" onclick="confirmAddLearner()">Add Learner ✨</button>
+      </div>
+    </div>`;
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+
+  const inp = document.getElementById('ml-name');
+  inp.focus();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddLearner(); });
+}
+
+async function confirmAddLearner() {
+  const name   = document.getElementById('ml-name')?.value.trim();
+  const avatar = getSelectedAvatar('ml-avatar-picker');
+  const focus_note = document.getElementById('ml-focus-note')?.value.trim() || null;
+  const { active_domains, starting_levels } = getFocusSelections();
+  if (!name) { alert('Please enter a name!'); return; }
+  if (active_domains.length === 0) { alert('Please pick at least one focus area to start with!'); return; }
+
+  try {
+    const learner = await financeApi.addLearner(name, avatar, active_domains, starting_levels, focus_note);
+    S.learners.push(learner);
+    closeModal();
+    renderFinanceHome();
+  } catch (e) {
+    alert('Error adding learner — please try again.');
+  }
+}
+
+// ── Screen: Finance Dashboard ─────────────────────────────────────────────
+function renderFinanceDashboard() {
+  const l    = S.currentLearner;
+  const prog = S.financeProgress;
+  const activeDomains = (l.active_domains && l.active_domains.length) ? l.active_domains : [FINANCE_CORE_DOMAIN];
+
+  const domainCards = Object.entries(FINANCE_DOMAIN_INFO).map(([key, info]) => {
+    if (!activeDomains.includes(key)) {
+      return `
+        <div style="position:relative">
+          <button class="domain-card domain-card-inactive" data-domain="${key}" onclick="quickAddLearnerFocusArea('${key}')">
+            <div class="domain-icon">${info.icon}</div>
+            <div class="domain-name">${info.name}</div>
+            <div class="domain-stats">＋ Add this area</div>
+          </button>
+        </div>`;
+    }
+
+    const d    = prog.domains[key] || { difficulty:2.0, total_questions:0, correct:0, accuracy:0, difficulty_desc:'', recent_results:[] };
+    const pct  = d.accuracy || 0;
+    const dots = (d.recent_results || []).map(r =>
+      `<div class="rdot ${r ? 'ok' : 'bad'}"></div>`).join('');
+    const stats = d.total_questions > 0
+      ? `${d.correct}/${d.total_questions} correct · ${esc(d.difficulty_desc)}`
+      : 'Not started yet — tap to begin!';
+
+    return `
+      <div style="position:relative">
+        <button class="domain-card" data-domain="${key}" onclick="startLearnerDomain('${key}')">
+          <div class="domain-icon">${info.icon}</div>
+          <div class="domain-name">${info.name}</div>
+          <div class="domain-stats">${stats}</div>
+          ${d.total_questions > 0 ? `
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <div class="recent-dots">${dots}</div>` : ''}
+        </button>
+        ${d.total_questions > 0 ? `
+          <div style="display:flex;gap:6px;margin-top:8px;justify-content:center">
+            <button class="btn btn-sm" style="flex:1;font-size:0.8em" onclick="adjustLearnerDifficulty('${key}',-0.5)">📉 Easier</button>
+            <button class="btn btn-sm" style="flex:1;font-size:0.8em" onclick="adjustLearnerDifficulty('${key}',0.5)">📈 Harder</button>
+          </div>` : ''}
+      </div>`;
+  }).join('');
+
+  appEl.innerHTML = `
+    <div class="card text-center" style="padding:30px">
+      <div style="font-size:4em">${avatarForLearner(l)}</div>
+      <h2 style="font-size:1.7em;font-weight:900;margin-top:8px">${esc(l.name)}</h2>
+      <p class="muted">Finance Training</p>
+      ${l.focus_note ? `<p class="muted" style="font-size:0.85em;margin-top:6px;font-style:italic">"${esc(l.focus_note)}"</p>` : ''}
+      <div class="row" style="justify-content:center;gap:8px;margin-top:12px;max-width:460px;margin-left:auto;margin-right:auto">
+        <button class="btn btn-ghost" style="font-size:0.9em" onclick="showEditLearnerModal()">⚙️ Edit Settings</button>
+        <button class="btn btn-ghost" style="font-size:0.9em" onclick="showManageLearnerFocusModal()">🎯 Focus Areas</button>
+        <button class="btn btn-ghost" style="font-size:0.9em" onclick="showLearnerProgressReportModal()">📊 Progress Report</button>
+      </div>
+    </div>
+    <h3 style="font-weight:800;font-size:1.1em;margin-bottom:4px">Choose an area to practise</h3>
+    <p class="muted" style="font-size:0.88em;margin-bottom:16px">Questions get harder as you improve — and easier if you need more practice</p>
+    <div class="domain-grid">${domainCards}</div>`;
+}
+
+async function quickAddLearnerFocusArea(domain) {
+  const l = S.currentLearner;
+  const current = (l.active_domains && l.active_domains.length) ? l.active_domains : [FINANCE_CORE_DOMAIN];
+  if (current.includes(domain)) return;
+  const updated = [...current, domain];
+
+  try {
+    const updatedLearner = await financeApi.updateFocus(l.id, { active_domains: updated, focus_note: l.focus_note });
+    S.currentLearner = updatedLearner;
+    S.financeProgress = await financeApi.getProgress(l.id);
+    renderFinanceDashboard();
+  } catch (e) {
+    alert('Could not add this area — please try again.');
+  }
+}
+
+async function adjustLearnerDifficulty(domain, delta) {
+  try {
+    await financeApi.adjustDifficulty(S.currentLearner.id, domain, delta);
+    S.financeProgress = await financeApi.getProgress(S.currentLearner.id);
+    renderFinanceDashboard();
+  } catch (e) {
+    alert('Error adjusting difficulty — please try again.');
+  }
+}
+
+// ── Screen: Finance Question ──────────────────────────────────────────────
+async function startLearnerDomain(domain) {
+  S.currentFinanceDomain = domain;
+  S.financeSession       = { correct: 0, total: 0, results: [] };
+  await loadNextLearnerQuestion();
+}
+
+async function loadNextLearnerQuestion() {
+  setLoading('Generating your question... ✨');
+  try {
+    S.currentFinanceQ = await financeApi.getQuestion(S.currentLearner.id, S.currentFinanceDomain);
+    renderLearnerQuestion();
+  } catch (e) {
+    appEl.innerHTML = `
+      <div class="card">
+        <p style="font-size:1.5em">😕</p>
+        <p style="margin-top:8px">Oops — couldn't generate a question. Please try again.</p>
+        <button class="btn btn-primary mt-16" onclick="loadNextLearnerQuestion()">Try Again</button>
+      </div>`;
+  }
+}
+
+function renderLearnerQuestion() {
+  const { question, difficulty_desc } = S.currentFinanceQ;
+  const info    = FINANCE_DOMAIN_INFO[S.currentFinanceDomain];
+  const results = S.financeSession.results;
+
+  const dots = Array.from({ length: SESSION_LENGTH }, (_, i) => {
+    if      (i < results.length)     return `<div class="pdot ${results[i] ? 'correct' : 'incorrect'}"></div>`;
+    else if (i === results.length)   return `<div class="pdot current"></div>`;
+    else                              return `<div class="pdot"></div>`;
+  }).join('');
+
+  let body = '';
+  if (question.passage) {
+    body += `<div class="passage-box">${esc(question.passage)}</div>`;
+  }
+  body += `<div class="question-text">${esc(question.question)}</div>`;
+  body += `<div class="options-list">
+    ${Object.entries(question.options).map(([k, v]) => `
+      <button class="opt-btn" data-key="${k}" onclick="submitLearnerMCQ('${k}')">
+        <span class="opt-letter">${k}</span>
+        <span>${esc(v)}</span>
+      </button>`).join('')}
+  </div>`;
+
+  appEl.innerHTML = `
+    <div class="card">
+      <div class="q-header">
+        <span style="font-size:1.4em;margin-right:8px">${info.icon}</span>
+        <strong style="flex:1">${info.name}</strong>
+        <span class="diff-badge">${esc(difficulty_desc)}</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px">
+        <div class="progress-dots">${dots}</div>
+        <span class="muted" style="font-size:0.88em">Q${results.length + 1} of ${SESSION_LENGTH}</span>
+      </div>
+      ${body}
+    </div>
+    <button class="btn btn-ghost mt-8" onclick="renderFinanceDashboard()">← Back to areas</button>`;
+}
+
+async function submitLearnerMCQ(key) {
+  document.querySelectorAll('.opt-btn').forEach(b => b.disabled = true);
+  await processLearnerAnswer(key);
+}
+
+async function processLearnerAnswer(answer) {
+  try {
+    const result = await financeApi.submitAnswer(
+      S.currentLearner.id, S.currentFinanceDomain, S.currentFinanceQ.question, answer
+    );
+    S.lastFinanceResult = result;
+    const correct = result.feedback.is_correct;
+    S.financeSession.total++;
+    if (correct) S.financeSession.correct++;
+    S.financeSession.results.push(correct ? 1 : 0);
+    renderLearnerFeedback();
+  } catch (e) {
+    appEl.innerHTML = `
+      <div class="card">
+        <p>Error submitting answer — please try again.</p>
+        <button class="btn btn-primary mt-16" onclick="renderLearnerQuestion()">Back</button>
+      </div>`;
+  }
+}
+
+// ── Screen: Finance Feedback ───────────────────────────────────────────────
+function renderLearnerFeedback() {
+  const { feedback, difficulty_changed } = S.lastFinanceResult;
+  const q       = S.currentFinanceQ.question;
+  const correct = feedback.is_correct;
+  const isLast  = S.financeSession.results.length >= SESSION_LENGTH;
+
+  const answerBlock = `<div class="options-list" style="margin-bottom:14px">
+    ${Object.entries(q.options).map(([k, v]) => {
+      const isRight = k === feedback.correct_answer;
+      return `<div class="opt-btn ${isRight ? 'correct-ans' : ''}" style="cursor:default">
+        <span class="opt-letter">${k}</span>
+        <span>${esc(v)}</span>
+        ${isRight ? '<span style="margin-left:auto;color:var(--success);font-size:1.2em">✓</span>' : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  let levelHtml = '';
+  if (difficulty_changed === 'up')
+    levelHtml = `<div class="text-center mt-8"><span class="level-pill level-up">🚀 Difficulty increased!</span></div>`;
+  else if (difficulty_changed === 'down')
+    levelHtml = `<div class="text-center mt-8"><span class="level-pill level-down">💡 Let's ease back a little first</span></div>`;
+
+  appEl.innerHTML = `
+    <div class="card">
+      <div class="feedback-emoji">${correct ? '🌟' : '📘'}</div>
+      <div class="feedback-result ${correct ? 'correct' : 'incorrect'}">
+        ${correct ? 'Correct!' : 'Not quite'}
+      </div>
+      ${levelHtml}
+      ${answerBlock}
+      <div class="expl-box">
+        <strong>💡 ${correct ? 'Why this is right:' : 'The answer:'}</strong><br>
+        ${esc(feedback.explanation || '')}
+      </div>
+      <div class="row mt-16">
+        <button class="btn btn-ghost" onclick="renderFinanceDashboard()">📊 Dashboard</button>
+        <button class="btn btn-primary btn-lg" style="flex:2"
+          onclick="${isLast ? 'renderLearnerComplete()' : 'loadNextLearnerQuestion()'}">
+          ${isLast ? '🏆 See Results' : 'Next Question →'}
+        </button>
+      </div>
+    </div>`;
+}
+
+// ── Screen: Finance Session complete ───────────────────────────────────────
+function renderLearnerComplete() {
+  const { correct, total } = S.financeSession;
+  const pct = Math.round(correct / total * 100);
+  const msg = pct === 100 ? "Perfect score — excellent grasp of this area! 🎉"
+            : pct >= 80   ? "Strong session — you're building real fluency here. 🎊"
+            : pct >= 60   ? "Solid progress — a bit more practice will consolidate this. 💪"
+            :               "Good effort — this area's worth another pass soon. 📘";
+
+  appEl.innerHTML = `
+    <div class="card text-center" style="padding:40px">
+      <h2 style="font-size:1.5em;font-weight:900">Session Complete!</h2>
+      <div class="score-big">${correct}/${total}</div>
+      <p class="score-sub">${pct}% correct</p>
+      <p class="muted" style="margin-bottom:32px">${msg}</p>
+      <div class="row" style="justify-content:center">
+        <button class="btn btn-ghost" onclick="renderFinanceDashboard()">📊 View Progress</button>
+        <button class="btn btn-primary btn-lg" onclick="startLearnerDomain('${S.currentFinanceDomain}')">🔄 Practice Again</button>
+      </div>
+    </div>`;
+}
+
+// ── Modal: Edit Learner Settings ─────────────────────────────────────────
+function showEditLearnerModal() {
+  const l = S.currentLearner;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'edit-learner-modal';
+
+  overlay.innerHTML = `
+    <div class="modal">
+      <h2 class="modal-title">⚙️ Edit Learner Settings</h2>
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input class="form-input" id="ml-edit-name" type="text" value="${esc(l.name)}" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Avatar</label>
+        ${avatarPickerHtml('ml-edit-avatar-picker', avatarForLearner(l))}
+      </div>
+      <div class="row mt-24">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:2" onclick="confirmEditLearner()">Save Changes ✓</button>
+      </div>
+    </div>`;
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+}
+
+async function confirmEditLearner() {
+  const name   = document.getElementById('ml-edit-name')?.value.trim();
+  const avatar = getSelectedAvatar('ml-edit-avatar-picker');
+  if (!name) { alert('Please enter a name!'); return; }
+
+  try {
+    await financeApi.updateLearner(S.currentLearner.id, { name, avatar });
+    const prog = await financeApi.getProgress(S.currentLearner.id);
+    S.currentLearner  = prog.learner;
+    S.financeProgress = prog;
+    closeModal();
+    renderFinanceDashboard();
+  } catch (e) {
+    alert('Error updating learner — please try again.');
+  }
+}
+
+// ── Modal: Manage Focus Areas (Finance) ──────────────────────────────────
+function showManageLearnerFocusModal() {
+  const l = S.currentLearner;
+  const active = (l.active_domains && l.active_domains.length) ? l.active_domains : [FINANCE_CORE_DOMAIN];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'learner-focus-modal';
+
+  overlay.innerHTML = `
+    <div class="modal modal-guide">
+      <h2 class="modal-title">🎯 Focus Areas</h2>
+      <p class="muted" style="font-size:0.88em;margin-bottom:16px">Choose which areas
+      ${esc(l.name)} is currently working on. Corporate Finance is the recommended core — the
+      rest are electives. Unticked areas stay available to add anytime. The level pick only
+      applies to areas not yet started.</p>
+      <div class="focus-area-list">${focusAreaListHtml(active, {}, FINANCE_DOMAIN_INFO, FINANCE_LEVEL_LABELS)}</div>
+      <div class="form-group mt-16">
+        <label class="form-label">Focus note <span class="muted" style="font-weight:400">(optional)</span></label>
+        <textarea class="form-input" id="ml-focus-note-edit" rows="2" placeholder="e.g. want to get better at valuation...">${esc(l.focus_note || '')}</textarea>
+      </div>
+      <div class="row mt-24">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" style="flex:2" onclick="confirmManageLearnerFocus()">Save Changes ✓</button>
+      </div>
+    </div>`;
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+}
+
+async function confirmManageLearnerFocus() {
+  const { active_domains, starting_levels } = getFocusSelections();
+  const focus_note = document.getElementById('ml-focus-note-edit')?.value.trim() || '';
+  if (active_domains.length === 0) { alert('Please keep at least one focus area active!'); return; }
+
+  try {
+    const updatedLearner = await financeApi.updateFocus(S.currentLearner.id, { active_domains, focus_note, starting_levels });
+    S.currentLearner = updatedLearner;
+    S.financeProgress = await financeApi.getProgress(S.currentLearner.id);
+    closeModal();
+    renderFinanceDashboard();
+  } catch (e) {
+    alert('Error updating focus areas — please try again.');
+  }
+}
+
+// ── Modal: Progress Report (Finance) ─────────────────────────────────────
+async function showLearnerProgressReportModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'learner-report-modal';
+  overlay.innerHTML = `
+    <div class="modal modal-guide">
+      <h2 class="modal-title">📊 Progress Report</h2>
+      <div class="loading-spinner"><div class="spinner"></div><p>Loading report...</p></div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  document.body.appendChild(overlay);
+
+  try {
+    const data = await financeApi.getHistory(S.currentLearner.id);
+    renderLearnerProgressReport(data);
+  } catch (e) {
+    const modal = document.querySelector('#learner-report-modal .modal');
+    if (modal) modal.innerHTML = `
+      <h2 class="modal-title">📊 Progress Report</h2>
+      <p>Couldn't load the report right now — please try again.</p>
+      <button class="btn btn-primary btn-full mt-16" onclick="closeModal()">Close</button>`;
+  }
+}
+
+function renderLearnerProgressReport(data) {
+  const modal = document.querySelector('#learner-report-modal .modal');
+  if (!modal) return;
+
+  const domains = Object.entries(data.history || {});
+  if (domains.length === 0) {
+    modal.innerHTML = `
+      <h2 class="modal-title">📊 Progress Report</h2>
+      <p class="muted">No questions answered yet — once ${esc(data.learner.name)} completes a
+      few, results and improvement areas will show up here.</p>
+      <button class="btn btn-primary btn-full mt-16" onclick="closeModal()">Close</button>`;
+    return;
+  }
+
+  const sections = domains.map(([domain, d]) => {
+    const info = FINANCE_DOMAIN_INFO[domain] || { icon: '✨', name: domain };
+
+    const improvementHtml = d.improvement_areas.length
+      ? d.improvement_areas.map(t => `
+          <div class="topic-row">
+            <span>${esc(t.topic)}</span>
+            <span class="topic-badge">${t.correct}/${t.total} · ${t.accuracy}%</span>
+          </div>`).join('')
+      : `<p class="muted" style="font-size:0.88em">No clear problem areas yet — going well!</p>`;
+
+    const recentHtml = d.recent_sessions.map(s => {
+      const date = new Date(s.timestamp).toLocaleString(undefined,
+        { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      return `
+        <div class="session-row">
+          <span>${s.is_correct ? '✅' : '❌'}</span>
+          <span class="session-topic">${esc(s.topic || 'general')}</span>
+          <span class="muted session-date">${date}</span>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="guide-section">
+        <h3>${info.icon} ${info.name} — ${d.accuracy}% overall (${d.correct}/${d.total_questions})</h3>
+        <p class="muted" style="font-size:0.85em;margin-bottom:6px;font-weight:700">🎯 Areas to focus on</p>
+        ${improvementHtml}
+        <p class="muted" style="font-size:0.85em;margin:14px 0 6px;font-weight:700">🕐 Recent answers</p>
+        <div class="session-list">${recentHtml}</div>
+      </div>`;
+  }).join('');
+
+  modal.innerHTML = `
+    <h2 class="modal-title">📊 ${esc(data.learner.name)}'s Progress Report</h2>
+    ${sections}
+    <button class="btn btn-primary btn-full mt-16" onclick="closeModal()">Close</button>`;
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────

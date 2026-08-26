@@ -46,6 +46,32 @@ header {
   letter-spacing: -0.5px;
 }
 
+.mode-toggle {
+  display: flex;
+  gap: 4px;
+  background: #F1F5F9;
+  border-radius: 100px;
+  padding: 4px;
+}
+.mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.82em;
+  padding: 7px 12px;
+  border-radius: 100px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.mode-btn.active { background: #fff; color: #4F46E5; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+@media (max-width: 500px) {
+  .mode-btn { font-size: 0.72em; padding: 6px 9px; }
+}
+
 /* ── Layout ── */
 main {
   max-width: 780px;
@@ -149,6 +175,17 @@ main {
 .domain-card[data-domain="numeracy"]             { background: linear-gradient(135deg, #2563EB, #60A5FA); }
 .domain-card[data-domain="language_conventions"] { background: linear-gradient(135deg, #B45309, #FCD34D); color: #431407; }
 .domain-card[data-domain="writing"]              { background: linear-gradient(135deg, #059669, #6EE7B7); }
+
+.domain-card[data-domain="corporate_finance"]     { background: linear-gradient(135deg, #4F46E5, #818CF8); }
+.domain-card[data-domain="financial_management"]  { background: linear-gradient(135deg, #0D9488, #5EEAD4); }
+.domain-card[data-domain="business_economics"]    { background: linear-gradient(135deg, #EA580C, #FDBA74); }
+.domain-card[data-domain="data_analysis"]         { background: linear-gradient(135deg, #0891B2, #67E8F9); }
+.domain-card[data-domain="decentralised_finance"] { background: linear-gradient(135deg, #7C3AED, #C4B5FD); }
+.domain-card[data-domain="robo_advice"]           { background: linear-gradient(135deg, #475569, #94A3B8); }
+.domain-card[data-domain="international_finance"] { background: linear-gradient(135deg, #059669, #6EE7B7); }
+.domain-card[data-domain="private_equity_vc"]     { background: linear-gradient(135deg, #E11D48, #FB7185); }
+.domain-card[data-domain="equity_valuation"]      { background: linear-gradient(135deg, #D97706, #FCD34D); }
+.domain-card[data-domain="fixed_income"]          { background: linear-gradient(135deg, #1E40AF, #93C5FD); }
 
 .domain-card.domain-card-inactive {
   background: #F1F5F9;
