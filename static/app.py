@@ -544,6 +544,36 @@ def parse_claude_json(text: str) -> dict:
         raise
 
 
+def shuffle_mc_options(question_data: dict) -> dict:
+    """Randomize which letter (A/B/C/D) holds the correct answer.
+
+    Left to itself, the model has a strong, consistent bias toward writing the
+    correct answer as option A and building distractors around it — reordering
+    the prompt doesn't reliably fix this, so we shuffle the actual options here
+    instead. Safe to call on any question: it's a no-op if there are no options
+    (e.g. writing prompts, read-aloud tasks) or the schema looks off.
+    """
+    options = question_data.get("options")
+    correct = question_data.get("correct_answer")
+    if not options or not correct or correct not in options:
+        return question_data
+
+    letters = list(options.keys())
+    items = list(options.items())  # [(orig_letter, text), ...]
+    random.shuffle(items)
+
+    new_options = {}
+    new_correct = None
+    for new_letter, (orig_letter, text) in zip(letters, items):
+        new_options[new_letter] = text
+        if orig_letter == correct:
+            new_correct = new_letter
+
+    question_data["options"] = new_options
+    question_data["correct_answer"] = new_correct
+    return question_data
+
+
 # --- Routes ---
 
 @app.get("/")
@@ -826,6 +856,7 @@ Make questions engaging and use Australian context (animals, currency, places) n
     )
 
     question_data = parse_claude_json(message.content[0].text)
+    question_data = shuffle_mc_options(question_data)
 
     # Track topic to avoid repetition
     topic = question_data.get("topic", "")
@@ -1261,6 +1292,7 @@ and situations a working professional would actually encounter — not abstract 
         messages=[{"role": "user", "content": prompt}],
     )
     question_data = parse_claude_json(message.content[0].text)
+    question_data = shuffle_mc_options(question_data)
 
     topic = question_data.get("topic", "")
     if topic:
