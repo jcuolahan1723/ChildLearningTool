@@ -2,7 +2,7 @@
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const SESSION_LENGTH = 5;
-const BREAK_INTERVAL = 3; // show a fun break after every N questions answered
+const BREAK_INTERVAL = 5; // show a fun break after every N questions answered, counted across sessions (not reset per session)
 
 const AVATARS = ['🦘','🐨','🦜','🐙','🦁','🐸','🦊','🐼','🦋','🐬','💼','📊','🎯','💡','🧠'];
 
@@ -40,6 +40,7 @@ const S = {
   currentQ:      null,   // { question, difficulty, difficulty_desc }
   lastResult:    null,   // response from /api/answer
   session:       { correct: 0, total: 0, results: [] },
+  questionsSinceBreak: 0, // counts across sessions — a break shouldn't come sooner just because a session ended
   // Finance track — mirrors the above, kept entirely separate
   learners:            [],
   currentLearner:       null,
@@ -210,6 +211,7 @@ function goHome() {
   S.currentChild  = null;
   S.currentDomain = null;
   S.session       = { correct: 0, total: 0, results: [] };
+  S.questionsSinceBreak = 0;
   S.currentLearner       = null;
   S.currentFinanceDomain = null;
   S.financeSession       = { correct: 0, total: 0, results: [] };
@@ -412,6 +414,7 @@ const FUN_BREAK_META = {
 
 async function renderFunBreak() {
   setLoading('Loading something fun... 🎉');
+  S.questionsSinceBreak = 0;
   try {
     S.currentBreak = await api.getFunBreak(S.currentChild.id);
     renderBreakContent();
@@ -562,6 +565,7 @@ async function processAnswer(answer) {
     S.session.total++;
     if (correct) S.session.correct++;
     S.session.results.push(correct ? 1 : 0);
+    S.questionsSinceBreak++;
     renderFeedback();
   } catch (e) {
     appEl.innerHTML = `
@@ -578,7 +582,7 @@ function renderFeedback() {
   const q        = S.currentQ.question;
   const correct  = feedback.is_correct;
   const isLast   = S.session.results.length >= SESSION_LENGTH;
-  const showBreakNext = !isLast && S.session.results.length % BREAK_INTERVAL === 0;
+  const showBreakNext = !isLast && S.questionsSinceBreak >= BREAK_INTERVAL;
 
   // Re-render MCQ options with colour coding
   let answerBlock = '';
